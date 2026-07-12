@@ -1,0 +1,206 @@
+module DamlLens.CethCollateral where
+
+import DA.Date
+
+template CethCollateralLock
+  with
+    borrower : Party
+    lender : Party
+    custody : Party
+    riskAgent : Party
+    amount : Decimal
+    asset : Text
+    lockId : Text
+  where
+    signatory borrower
+    observer lender, custody, riskAgent
+
+    choice ProposeLoanTerms : ContractId LoanTerms
+      with
+        principal : Decimal
+        interestRate : Decimal
+        repaymentDue : Date
+      controller lender
+      do
+        create LoanTerms with
+          borrower
+          lender
+          custody
+          riskAgent
+          amount
+          asset
+          lockId
+          principal
+          interestRate
+          repaymentDue
+
+template LoanTerms
+  with
+    borrower : Party
+    lender : Party
+    custody : Party
+    riskAgent : Party
+    amount : Decimal
+    asset : Text
+    lockId : Text
+    principal : Decimal
+    interestRate : Decimal
+    repaymentDue : Date
+  where
+    signatory lender
+    observer borrower, custody, riskAgent
+
+    choice ReviewCollateral : ContractId RiskReview
+      controller riskAgent
+      do
+        create RiskReview with
+          borrower
+          lender
+          custody
+          riskAgent
+          amount
+          asset
+          lockId
+          principal
+          interestRate
+          repaymentDue
+          status = "Collateral reviewed"
+
+template RiskReview
+  with
+    borrower : Party
+    lender : Party
+    custody : Party
+    riskAgent : Party
+    amount : Decimal
+    asset : Text
+    lockId : Text
+    principal : Decimal
+    interestRate : Decimal
+    repaymentDue : Date
+    status : Text
+  where
+    signatory riskAgent
+    observer borrower, lender, custody
+
+    choice ApproveFunding : ContractId FundingApproval
+      controller lender
+      do
+        create FundingApproval with
+          borrower
+          lender
+          custody
+          riskAgent
+          amount
+          asset
+          lockId
+          principal
+          interestRate
+          repaymentDue
+          approvedAt = date 2026 Jul 10
+
+template FundingApproval
+  with
+    borrower : Party
+    lender : Party
+    custody : Party
+    riskAgent : Party
+    amount : Decimal
+    asset : Text
+    lockId : Text
+    principal : Decimal
+    interestRate : Decimal
+    repaymentDue : Date
+    approvedAt : Date
+  where
+    signatory lender
+    observer borrower, custody, riskAgent
+
+    choice MarkRepaymentMissed : ContractId RepaymentObligation
+      controller borrower
+      do
+        create RepaymentObligation with
+          borrower
+          lender
+          custody
+          riskAgent
+          amount
+          asset
+          lockId
+          principal
+          interestRate
+          repaymentDue
+          status = "Repayment confirmation missing"
+
+template RepaymentObligation
+  with
+    borrower : Party
+    lender : Party
+    custody : Party
+    riskAgent : Party
+    amount : Decimal
+    asset : Text
+    lockId : Text
+    principal : Decimal
+    interestRate : Decimal
+    repaymentDue : Date
+    status : Text
+  where
+    signatory borrower
+    observer lender, custody, riskAgent
+
+    choice ConfirmRepayment : ContractId CollateralRelease
+      controller borrower
+      do
+        create CollateralRelease with
+          borrower
+          lender
+          custody
+          riskAgent
+          amount
+          asset
+          lockId
+          releaseStatus = "Release approved after repayment"
+
+    choice EscalateCollateral : ContractId CollateralActionRequired
+      controller lender
+      do
+        create CollateralActionRequired with
+          borrower
+          lender
+          custody
+          riskAgent
+          amount
+          asset
+          lockId
+          reason = "Repayment unresolved; collateral action required"
+
+template CollateralRelease
+  with
+    borrower : Party
+    lender : Party
+    custody : Party
+    riskAgent : Party
+    amount : Decimal
+    asset : Text
+    lockId : Text
+    releaseStatus : Text
+  where
+    signatory custody
+    observer borrower, lender, riskAgent
+
+template CollateralActionRequired
+  with
+    borrower : Party
+    lender : Party
+    custody : Party
+    riskAgent : Party
+    amount : Decimal
+    asset : Text
+    lockId : Text
+    reason : Text
+  where
+    signatory lender
+    observer borrower, custody, riskAgent
+
+

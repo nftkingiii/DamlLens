@@ -1,0 +1,219 @@
+module DamlLens.InvoiceFinance where
+
+import DA.Date
+
+template Invoice
+  with
+    supplier : Party
+    buyer : Party
+    amount : Decimal
+    currency : Text
+    dueDate : Date
+    description : Text
+  where
+    signatory supplier
+    observer buyer
+
+    choice AcceptInvoice : ContractId AcceptedInvoice
+      controller buyer
+      do
+        create AcceptedInvoice with
+          supplier
+          buyer
+          amount
+          currency
+          dueDate
+          description
+
+    choice DisputeInvoice : ContractId DisputedInvoice
+      with reason : Text
+      controller buyer
+      do
+        create DisputedInvoice with
+          supplier
+          buyer
+          amount
+          currency
+          dueDate
+          description
+          reason
+
+template AcceptedInvoice
+  with
+    supplier : Party
+    buyer : Party
+    amount : Decimal
+    currency : Text
+    dueDate : Date
+    description : Text
+  where
+    signatory supplier, buyer
+
+    choice RequestFinancing : ContractId FinancingRequest
+      with financier : Party
+      controller supplier
+      do
+        create FinancingRequest with
+          supplier
+          buyer
+          financier
+          amount
+          currency
+          dueDate
+          description
+          status = "Awaiting financier approval"
+
+template FinancingRequest
+  with
+    supplier : Party
+    buyer : Party
+    financier : Party
+    amount : Decimal
+    currency : Text
+    dueDate : Date
+    description : Text
+    status : Text
+  where
+    signatory supplier
+    observer buyer, financier
+
+    choice FundInvoice : ContractId FundedInvoice
+      controller financier
+      do
+        create FundedInvoice with
+          supplier
+          buyer
+          financier
+          amount
+          currency
+          dueDate
+          description
+          fundedAt = date 2026 Jul 7
+
+    choice RejectFinancing : ContractId RejectedFinancing
+      with reason : Text
+      controller financier
+      do
+        create RejectedFinancing with
+          supplier
+          buyer
+          financier
+          amount
+          currency
+          dueDate
+          description
+          reason
+
+template FundedInvoice
+  with
+    supplier : Party
+    buyer : Party
+    financier : Party
+    amount : Decimal
+    currency : Text
+    dueDate : Date
+    description : Text
+    fundedAt : Date
+  where
+    signatory supplier, financier
+    observer buyer
+
+    choice MarkBuyerPaid : ContractId PaymentReceived
+      controller buyer
+      do
+        create PaymentReceived with
+          supplier
+          buyer
+          financier
+          amount
+          currency
+          paidAt = date 2026 Jul 12
+
+    choice FlagOverdue : ContractId OverdueInvoice
+      controller financier
+      do
+        create OverdueInvoice with
+          supplier
+          buyer
+          financier
+          amount
+          currency
+          dueDate
+          status = "Buyer payment missing"
+
+template PaymentReceived
+  with
+    supplier : Party
+    buyer : Party
+    financier : Party
+    amount : Decimal
+    currency : Text
+    paidAt : Date
+  where
+    signatory buyer
+    observer supplier, financier
+
+    choice SettleFinancing : ContractId SettledInvoice
+      controller supplier, financier
+      do
+        create SettledInvoice with
+          supplier
+          buyer
+          financier
+          amount
+          currency
+          settledAt = date 2026 Jul 12
+
+template SettledInvoice
+  with
+    supplier : Party
+    buyer : Party
+    financier : Party
+    amount : Decimal
+    currency : Text
+    settledAt : Date
+  where
+    signatory supplier, financier
+    observer buyer
+
+template DisputedInvoice
+  with
+    supplier : Party
+    buyer : Party
+    amount : Decimal
+    currency : Text
+    dueDate : Date
+    description : Text
+    reason : Text
+  where
+    signatory buyer
+    observer supplier
+
+template RejectedFinancing
+  with
+    supplier : Party
+    buyer : Party
+    financier : Party
+    amount : Decimal
+    currency : Text
+    dueDate : Date
+    description : Text
+    reason : Text
+  where
+    signatory financier
+    observer supplier, buyer
+
+template OverdueInvoice
+  with
+    supplier : Party
+    buyer : Party
+    financier : Party
+    amount : Decimal
+    currency : Text
+    dueDate : Date
+    status : Text
+  where
+    signatory financier
+    observer supplier, buyer
+
+

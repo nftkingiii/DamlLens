@@ -1,0 +1,4 @@
+# Railway deploys this repository as two services. Configure each service's
+# Root Directory in the Railway dashboard instead of using this file directly:
+#   damllens-backend  -> /backend
+#   damllens-frontend -> /frontend

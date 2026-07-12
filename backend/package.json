@@ -1,0 +1,14 @@
+{
+  "name": "damllens-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/canton/client.js && node --check src/analysis/workflowAnalyzer.js && node --check src/config.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,10 @@
+node_modules
+.output
+.tanstack
+.wrangler
+.lovable
+.git
+*.log
+.env
+.env.*
+!.env.example

@@ -1,0 +1,71 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Canton Explorer</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="index.html" aria-label="Canton home"><span class="brand-mark" aria-hidden="true"></span><span>canton</span></a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="index.html">Home</a>
+        <a href="network.html">Network</a>
+        <a class="active" href="explorer.html">Explorer</a>
+        <a href="activity.html">Activity</a>
+        <a href="about.html">About</a>
+      </nav>
+      <a class="nav-cta" href="activity.html">Latest activity</a>
+    </header>
+
+    <main>
+      <section class="explorer-shell">
+        <div class="explorer-hero">
+          <div class="explorer-title">
+            <span class="mini-logo" aria-hidden="true"></span>
+            <h1>Canton Explorer</h1>
+            <p>Understand ecosystem movement, participant concentration, and application-level activity.</p>
+          </div>
+          <div class="period-control" aria-label="Time period selector">
+            <button type="button" class="active" data-period="24h">24h</button>
+            <button type="button" data-period="7d">7d</button>
+            <button type="button" data-period="30d">30d</button>
+          </div>
+        </div>
+
+        <section class="overview-grid" aria-label="Network overview">
+          <article><span>Observed volume</span><strong id="volumeMetric">$428.6M</strong></article>
+          <article><span>Activity count</span><strong id="activityMetric">18,740</strong></article>
+          <article><span>Unique participants</span><strong id="participantMetric">3,842</strong></article>
+        </section>
+
+        <section class="analytics-grid">
+          <article class="chart-card">
+            <div class="card-heading">
+              <div><p class="eyebrow">Past 30 days</p><h3>Network volume</h3></div>
+              <strong id="chartTotal">$428.6M</strong>
+            </div>
+            <div class="bar-chart" id="barChart" aria-label="Past 30 days volume chart"></div>
+            <div class="chart-axis"><span>31 May</span><span>06 Jun</span><span>12 Jun</span><span>18 Jun</span></div>
+          </article>
+
+          <article class="flow-card">
+            <div class="card-heading">
+              <div><p class="eyebrow">Past week flow</p><h3>Source and destination</h3></div>
+              <span class="flow-label">Canton apps</span>
+            </div>
+            <div class="flow-board">
+              <div class="flow-list" id="sourceList" aria-label="Source flow list"></div>
+              <div class="flow-lines" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+              <div class="flow-list destination" id="destinationList" aria-label="Destination flow list"></div>
+            </div>
+          </article>
+        </section>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,47 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Canton Activity</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="index.html" aria-label="Canton home"><span class="brand-mark" aria-hidden="true"></span><span>canton</span></a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="index.html">Home</a>
+        <a href="network.html">Network</a>
+        <a href="explorer.html">Explorer</a>
+        <a class="active" href="activity.html">Activity</a>
+        <a href="about.html">About</a>
+      </nav>
+      <a class="nav-cta" href="explorer.html">Open explorer</a>
+    </header>
+
+    <main>
+      <section class="page-hero compact-page-hero">
+        <p class="eyebrow">Latest Activity</p>
+        <h1>Recent ecosystem events.</h1>
+        <p>Follow high-signal Canton activity across applications, synchronizers, domains, and reporting surfaces.</p>
+      </section>
+      <section class="transactions-card">
+        <div class="card-heading">
+          <div><p class="eyebrow">Live feed</p><h3>Recent ecosystem events</h3></div>
+          <button class="secondary-button" id="refreshBtn" type="button">Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Event</th><th>Source</th><th>Destination</th><th>Value</th><th>Status</th><th>Age</th></tr>
+            </thead>
+            <tbody id="activityRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

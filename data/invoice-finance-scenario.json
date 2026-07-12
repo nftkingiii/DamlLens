@@ -1,0 +1,16 @@
+﻿{
+  "workflowId": "INV-2048",
+  "scenario": "Tokenized invoice financing",
+  "sourceModel": "daml/DamlLens/InvoiceFinance.daml",
+  "currentState": "OverdueInvoice active",
+  "stoppedBecause": "Buyer payment was not marked after FundInvoice, so the financier exercised FlagOverdue.",
+  "nextAuthorizedParty": "Northstar Buyer",
+  "inspectionGoalSeconds": 60,
+  "events": [
+    { "step": 1, "template": "Invoice", "action": "Create", "controller": "Atlas Supplier", "state": "active then archived" },
+    { "step": 2, "template": "Invoice", "action": "AcceptInvoice", "controller": "Northstar Buyer", "state": "AcceptedInvoice active" },
+    { "step": 3, "template": "AcceptedInvoice", "action": "RequestFinancing", "controller": "Atlas Supplier", "state": "FinancingRequest active" },
+    { "step": 4, "template": "FinancingRequest", "action": "FundInvoice", "controller": "Canton Capital", "state": "FundedInvoice active" },
+    { "step": 5, "template": "FundedInvoice", "action": "FlagOverdue", "controller": "Canton Capital", "state": "OverdueInvoice active" }
+  ]
+}

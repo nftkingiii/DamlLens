@@ -1,0 +1,118 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DamlLens - Daml Workflow Visibility</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="lovable-page-body">
+    <main class="lovable-landing" aria-labelledby="landingTitle">
+      <div class="lovable-noise" aria-hidden="true"></div>
+
+      <header class="lovable-nav" aria-label="DamlLens landing navigation">
+        <a class="lovable-brand" href="index.html" aria-label="DamlLens home">
+          <span class="lovable-brand-mark"><span></span></span>
+          <span>DamlLens</span>
+        </a>
+        <div class="lovable-actions">
+          <span class="lovable-status"><i></i>Workflow Visibility</span>
+          <a class="lovable-open" href="lens.html">Open Lens</a>
+        </div>
+      </header>
+
+      <section class="lovable-hero">
+        <div class="lovable-copy">
+          <span class="lovable-kicker">Canton / Daml debugger - Hackathon build</span>
+          <h1 id="landingTitle">See <em>why</em> a Daml workflow <em>stopped.</em></h1>
+          <p>
+            DamlLens turns Canton/Daml activity into workflow timelines, party authority maps,
+            and contract state explanations so builders can debug and explain workflows faster.
+          </p>
+          <div class="lovable-cta-row">
+            <a class="lovable-primary" href="lens.html">Open Lens <span>-></span></a>
+            <a class="lovable-secondary" href="daml/DamlLens/InvoiceFinance.daml">View Daml model</a>
+          </div>
+          <div class="lovable-pills" aria-label="Core concepts">
+            <span><i></i>State</span>
+            <span><i></i>Choices</span>
+            <span><i></i>Parties</span>
+          </div>
+          <ul class="lovable-points">
+            <li>Workflow timelines, not raw events</li>
+            <li>Party authority and observer visibility</li>
+            <li>Active vs archived contract history</li>
+            <li>Stuck and completed workflow status</li>
+          </ul>
+        </div>
+
+        <div class="lovable-map" id="lovableMap" aria-label="Animated Daml workflow map">
+          <svg viewBox="0 0 720 520" aria-hidden="true">
+            <defs>
+              <linearGradient id="lovableLine" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#30d5c8" stop-opacity="0.8" />
+                <stop offset="100%" stop-color="#7c3aed" stop-opacity="0.8" />
+              </linearGradient>
+            </defs>
+            <path d="M110 70 Q235 24 360 260" />
+            <path d="M355 40 Q342 130 360 260" />
+            <path d="M595 85 Q470 112 360 260" />
+            <path d="M360 260 Q500 250 605 355" />
+            <path d="M360 260 Q215 300 110 380" />
+            <path d="M360 260 Q350 360 320 445" />
+            <path d="M355 40 Q475 10 595 85" />
+          </svg>
+
+          <article class="lovable-card lc-1" style="--delay:.1s">
+            <header><span>contract</span><strong class="archived">archived</strong></header>
+            <h2>Invoice created</h2>
+            <p>controller: seller</p>
+          </article>
+          <article class="lovable-card lc-2" style="--delay:.25s">
+            <header><span>choice</span><strong class="active">active</strong></header>
+            <h2>AcceptInvoice</h2>
+            <p>controller: buyer</p>
+          </article>
+          <article class="lovable-card lc-3" style="--delay:.4s">
+            <header><span>contract</span><strong class="active">active</strong></header>
+            <h2>RequestFinancing</h2>
+            <p>observer: bank</p>
+          </article>
+          <article class="lovable-card lc-4" style="--delay:.55s">
+            <header><span>choice</span><strong class="stopped">stopped</strong></header>
+            <h2>FundInvoice</h2>
+            <p>controller: bank</p>
+          </article>
+          <article class="lovable-card lc-5" style="--delay:.7s">
+            <header><span>choice</span><strong class="archived">archived</strong></header>
+            <h2>FlagOverdue</h2>
+            <p>auto - t+30d</p>
+          </article>
+          <article class="lovable-card lc-6" style="--delay:.85s">
+            <header><span>party</span><strong class="next">can act next</strong></header>
+            <h2>Northstar Buyer</h2>
+            <p>next authorized party</p>
+          </article>
+
+          <div class="lovable-hub" aria-hidden="true">
+            <span></span>
+            <strong>Authority</strong>
+          </div>
+          <div class="lovable-debug-ticker" aria-hidden="true">
+            <span>60-second debug</span>
+            <p>-> FundInvoice - stopped</p>
+            <p>-> missing payment</p>
+            <p>-> next: Northstar Buyer</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="lovable-wordmark" aria-label="DamlLens brand section">
+        <div class="lovable-dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <a href="lens.html">Inspect the demo workflow</a>
+        <h2>DamlLens</h2>
+      </section>
+    </main>
+    <script src="landing.js"></script>
+  </body>
+</html>

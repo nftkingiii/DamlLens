@@ -1,0 +1,133 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DamlLens - Workflow Visibility for Canton</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <a class="brand" href="index.html" aria-label="DamlLens home">
+        <img src="assets/damllens-logo-480.png" alt="" class="brand-logo">
+        <span>DamlLens</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary">
+        <a href="#lens">Lens</a>
+        <a href="#contracts">Contracts</a>
+        <a href="#daml">Daml Model</a>
+      </nav>
+      <div class="header-actions">
+        <span class="network-pill">Demo ledger</span>
+        <button class="icon-button" id="resetDemo" type="button" title="Reset demo" aria-label="Reset demo">Reset</button>
+      </div>
+    </header>
+
+    <main class="workspace" id="lens">
+      <section class="hero-panel" aria-labelledby="pageTitle">
+        <div>
+          <p class="eyebrow">Workflow visibility for Canton/Daml apps</p>
+          <h1 id="pageTitle">Find why a workflow stopped, who can act, and what changed.</h1>
+        </div>
+        <aside class="metric-strip" aria-label="Demo metrics">
+          <div><span>Scenario</span><strong>Invoice financing</strong></div>
+          <div><span>Current state</span><strong id="currentState">Overdue</strong></div>
+          <div><span>Next party</span><strong id="nextParty">Northstar Buyer</strong></div>
+        </aside>
+      </section>
+
+      <section class="task-panel" aria-label="Demo task">
+        <div>
+          <span class="task-label">60-second demo task</span>
+          <strong>Can you explain why this workflow stopped and who can act next?</strong>
+        </div>
+        <button class="primary-button" id="runDiagnosis" type="button">Run diagnosis</button>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="panel timeline-panel" aria-labelledby="timelineTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Workflow timeline</p>
+              <h2 id="timelineTitle">INV-2048 lifecycle</h2>
+            </div>
+            <span class="status-badge danger">Stopped</span>
+          </div>
+          <ol class="timeline" id="timeline"></ol>
+        </article>
+
+        <article class="panel detail-panel" aria-labelledby="detailTitle">
+          <div class="panel-heading compact">
+            <div>
+              <p class="eyebrow">Selected event</p>
+              <h2 id="detailTitle">Contract detail</h2>
+            </div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-topline">
+              <span id="detailType">Choice exercised</span>
+              <strong id="detailChoice">FlagOverdue</strong>
+            </div>
+            <p id="detailSummary">Financier flagged the funded invoice because buyer payment has not been received by the due date.</p>
+            <dl class="detail-list">
+              <div><dt>Template</dt><dd id="detailTemplate">FundedInvoice</dd></div>
+              <div><dt>Controller</dt><dd id="detailController">Canton Capital</dd></div>
+              <div><dt>Result</dt><dd id="detailResult">OverdueInvoice active</dd></div>
+              <div><dt>Visibility</dt><dd id="detailVisibility">Supplier, Buyer, Financier</dd></div>
+            </dl>
+          </div>
+          <div class="diagnosis" id="diagnosis" aria-live="polite">
+            <span class="diagnosis-dot"></span>
+            <p>Select events to inspect state, authority, and visibility.</p>
+          </div>
+        </article>
+      </section>
+
+      <section class="dashboard-grid secondary-grid">
+        <article class="panel" aria-labelledby="partyTitle">
+          <div class="panel-heading compact">
+            <div>
+              <p class="eyebrow">Party-permission map</p>
+              <h2 id="partyTitle">Who can see and act</h2>
+            </div>
+          </div>
+          <div class="party-map" id="partyMap"></div>
+        </article>
+
+        <article class="panel" id="contracts" aria-labelledby="contractTitle">
+          <div class="panel-heading compact">
+            <div>
+              <p class="eyebrow">Contract state</p>
+              <h2 id="contractTitle">Active and archived</h2>
+            </div>
+            <div class="segmented" role="tablist" aria-label="Contract filter">
+              <button class="active" type="button" data-filter="all">All</button>
+              <button type="button" data-filter="active">Active</button>
+              <button type="button" data-filter="archived">Archived</button>
+            </div>
+          </div>
+          <div class="contract-list" id="contractList"></div>
+        </article>
+      </section>
+
+      <section class="panel daml-panel" id="daml" aria-labelledby="damlTitle">
+        <div class="panel-heading compact">
+          <div>
+            <p class="eyebrow">Daml source of truth</p>
+            <h2 id="damlTitle">Workflow model included in repo</h2>
+          </div>
+          <a class="secondary-button" href="daml/DamlLens/InvoiceFinance.daml">Open .daml</a>
+        </div>
+        <div class="code-preview" aria-label="Daml workflow summary">
+          <span>Invoice -> AcceptInvoice -> RequestFinancing -> FundInvoice -> FlagOverdue</span>
+          <span>Templates: Invoice, AcceptedInvoice, FinancingRequest, FundedInvoice, OverdueInvoice</span>
+          <span>Lens focus: active/archived state, choices, controllers, observers, next authorized party</span>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
+
