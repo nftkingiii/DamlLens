@@ -7,8 +7,11 @@ import {
   KeyRound,
   ListRestart,
   Loader2,
+  LogIn,
+  LogOut,
   Play,
   Radio,
+  ShieldCheck,
   Sparkles,
 } from "lucide-react";
 import { useState } from "react";
@@ -24,10 +27,13 @@ function AnalyzePage() {
     config,
     setConfig,
     connection,
+    auth,
     backend,
     busy,
     error,
     validate,
+    login,
+    disconnect,
     loadDemo,
     loadContracts,
     analyzeUpdateIds,
@@ -69,44 +75,85 @@ function AnalyzePage() {
             </div>
             <StatusBadge status={connection} />
           </div>
-          <div className="form-grid">
-            <label className="field full">
-              <span>gRPC Ledger API</span>
-              <input value={config.grpcApi} onChange={update("grpcApi")} />
-            </label>
-            <label className="field full">
-              <span>JSON Ledger API</span>
-              <input value={config.jsonApi} onChange={update("jsonApi")} />
-            </label>
-            <label className="field full">
-              <span>Short-lived bearer token</span>
-              <div className="input-icon">
-                <KeyRound />
-                <input
-                  type="password"
-                  value={config.bearerToken}
-                  onChange={update("bearerToken")}
-                  placeholder="Paste token"
-                  autoComplete="off"
-                />
+          {!config.bearerToken ? (
+            <div className="auth-connect-state">
+              <div className="auth-connect-icon">
+                <ShieldCheck />
               </div>
-              <small>
-                Kept in memory for this tab. It is not persisted with the connection settings.
-              </small>
-            </label>
-            <label className="field full">
-              <span>Party ID</span>
-              <input value={config.partyId} onChange={update("partyId")} />
-            </label>
-            <label className="field">
-              <span>Package ID</span>
-              <input value={config.packageId} onChange={update("packageId")} />
-            </label>
-            <label className="field">
-              <span>Workflow ID</span>
-              <input value={config.workflowId} onChange={update("workflowId")} />
-            </label>
-          </div>
+              <div>
+                <span className="eyebrow">Noders secure login</span>
+                <h3>Connect without handling tokens.</h3>
+                <p>
+                  Sign in on the provider's page. DamlLens never receives your password and
+                  automatically detects your Canton party after authorization.
+                </p>
+              </div>
+              <button
+                className="button primary auth-connect-button"
+                onClick={login}
+                disabled={!!busy}
+              >
+                <LogIn />
+                Connect to Canton
+              </button>
+              <div className="auth-assurances" aria-label="Connection assurances">
+                <span>
+                  <CheckCircle2 /> Provider-hosted login
+                </span>
+                <span>
+                  <CheckCircle2 /> User-scoped ledger access
+                </span>
+                <span>
+                  <CheckCircle2 /> No password stored
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="connected-session">
+              <div className="connected-session-main">
+                <span className="connection-dot connected" />
+                <div>
+                  <span className="eyebrow">Authenticated session</span>
+                  <h3>
+                    {auth === "authenticated" ? "Connected through Noders" : "Developer session"}
+                  </h3>
+                  <p className="mono-value">{config.partyId}</p>
+                </div>
+                <button className="button ghost compact" onClick={disconnect}>
+                  <LogOut /> Disconnect
+                </button>
+              </div>
+              <div className="button-row">
+                <button
+                  className="button secondary"
+                  onClick={validate}
+                  disabled={backend !== "online" || !!busy}
+                >
+                  {busy === "Validating participant" ? <Loader2 className="spin" /> : <Radio />}
+                  Validate access
+                </button>
+                <button
+                  className="button secondary"
+                  onClick={() => finish(loadContracts)}
+                  disabled={backend !== "online" || !!busy}
+                >
+                  <Database /> Load visible contracts
+                </button>
+                <button
+                  className="button primary"
+                  onClick={() => finish(loadDemo)}
+                  disabled={backend !== "online" || !!busy}
+                >
+                  {busy === "Loading verified DevNet workflow" ? (
+                    <Loader2 className="spin" />
+                  ) : (
+                    <Play />
+                  )}
+                  Load verified workflow
+                </button>
+              </div>
+            </div>
+          )}
           {error && (
             <div className="inline-error">
               <AlertCircle />
@@ -120,36 +167,47 @@ function AnalyzePage() {
               VITE_DAMLLENS_API_URL.
             </div>
           )}
-          <div className="button-row">
-            <button
-              className="button secondary"
-              onClick={validate}
-              disabled={backend !== "online" || !config.bearerToken || !!busy}
-            >
-              {busy === "Validating participant" ? <Loader2 className="spin" /> : <Radio />}
-              Validate connection
-            </button>
-            <button
-              className="button secondary"
-              onClick={() => finish(loadContracts)}
-              disabled={backend !== "online" || !config.bearerToken || !!busy}
-            >
-              <Database />
-              Load visible contracts
-            </button>
-            <button
-              className="button primary"
-              onClick={() => finish(loadDemo)}
-              disabled={backend !== "online" || !config.bearerToken || !!busy}
-            >
-              {busy === "Loading verified DevNet workflow" ? (
-                <Loader2 className="spin" />
-              ) : (
-                <Play />
-              )}
-              Load verified workflow
-            </button>
-          </div>
+          <details className="developer-connection">
+            <summary>Developer connection</summary>
+            <div className="connection-metadata">
+              <div>
+                <span>Environment</span>
+                <strong>HackCanton DevNet</strong>
+              </div>
+              <div>
+                <span>Workflow</span>
+                <strong>{config.workflowId}</strong>
+              </div>
+              <div className="full">
+                <span>Participant</span>
+                <code>{config.grpcApi}</code>
+              </div>
+            </div>
+            {!config.bearerToken && (
+              <div className="manual-token-row">
+                <label className="field">
+                  <span>Manual bearer token</span>
+                  <div className="input-icon">
+                    <KeyRound />
+                    <input
+                      type="password"
+                      value={config.bearerToken}
+                      onChange={update("bearerToken")}
+                      placeholder="Development fallback"
+                      autoComplete="off"
+                    />
+                  </div>
+                </label>
+                <button
+                  className="button secondary"
+                  onClick={validate}
+                  disabled={backend !== "online" || !config.bearerToken || !!busy}
+                >
+                  Validate token
+                </button>
+              </div>
+            )}
+          </details>
         </div>
 
         <aside className="analysis-options">

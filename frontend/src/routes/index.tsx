@@ -257,7 +257,7 @@ function Landing() {
             <span>01</span>
             <div>
               <strong>Connect participant</strong>
-              <p>Use a short-lived token and your visible Canton party.</p>
+              <p>Sign in securely and let DamlLens detect your visible Canton party.</p>
             </div>
           </li>
           <li>

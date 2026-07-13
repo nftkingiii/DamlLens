@@ -1,4 +1,10 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  beginLogin,
+  getAuthSession,
+  logout as logoutFromProvider,
+  refreshAuthSession,
+} from "@/lib/auth";
 
 export type TimelineItem = {
   id: string;
@@ -202,10 +208,13 @@ type LensContextValue = {
   config: ConnectionConfig;
   setConfig: React.Dispatch<React.SetStateAction<ConnectionConfig>>;
   connection: "disconnected" | "connecting" | "connected" | "error";
+  auth: "unauthenticated" | "authenticated" | "refreshing";
   backend: "checking" | "online" | "offline";
   busy: string | null;
   error: string | null;
   validate: () => Promise<void>;
+  login: () => Promise<void>;
+  disconnect: () => void;
   loadDemo: () => Promise<void>;
   loadContracts: () => Promise<void>;
   analyzeUpdateIds: (ids: string[]) => Promise<void>;
@@ -217,19 +226,29 @@ export function LensProvider({ children }: { children: ReactNode }) {
   const [analysis, setAnalysis] = useState(PREVIEW_ANALYSIS);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [connection, setConnection] = useState<LensContextValue["connection"]>("disconnected");
+  const [auth, setAuth] = useState<LensContextValue["auth"]>("unauthenticated");
   const [backend, setBackend] = useState<LensContextValue["backend"]>("checking");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoValidatedToken = useRef<string | null>(null);
 
   useEffect(() => {
     const saved = window.sessionStorage.getItem("damllens-config");
-    if (!saved) return;
-    try {
-      const parsed = JSON.parse(saved) as Partial<ConnectionConfig>;
-      setConfig((current) => ({ ...current, ...parsed, bearerToken: "" }));
-    } catch {
-      /* Ignore malformed local state. */
+    let savedConfig: Partial<ConnectionConfig> = {};
+    if (saved) {
+      try {
+        savedConfig = JSON.parse(saved) as Partial<ConnectionConfig>;
+      } catch {
+        /* Ignore malformed local state. */
+      }
     }
+    const session = getAuthSession();
+    setConfig((current) => ({
+      ...current,
+      ...savedConfig,
+      bearerToken: session?.accessToken || "",
+    }));
+    if (session) setAuth("authenticated");
   }, []);
 
   useEffect(() => {
@@ -252,6 +271,44 @@ export function LensProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    const session = getAuthSession();
+    if (!session?.refreshToken) return;
+    const delay = Math.max(5_000, session.expiresAt - Date.now() - 60_000);
+    const timer = window.setTimeout(async () => {
+      setAuth("refreshing");
+      try {
+        const refreshed = await refreshAuthSession();
+        if (!refreshed) throw new Error("Session expired");
+        setConfig((current) => ({ ...current, bearerToken: refreshed.accessToken }));
+        setAuth("authenticated");
+      } catch {
+        setConfig((current) => ({ ...current, bearerToken: "" }));
+        setConnection("disconnected");
+        setAuth("unauthenticated");
+      }
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [config.bearerToken]);
+
+  useEffect(() => {
+    const token = config.bearerToken;
+    if (backend !== "online" || !token || autoValidatedToken.current === token) return;
+    autoValidatedToken.current = token;
+    setConnection("connecting");
+    api<{ resolvedPartyId?: string }>("/api/connect/validate", config)
+      .then((result) => {
+        if (result.resolvedPartyId) {
+          setConfig((current) => ({ ...current, partyId: result.resolvedPartyId! }));
+        }
+        setConnection("connected");
+      })
+      .catch((cause) => {
+        setConnection("error");
+        setError(cause instanceof Error ? cause.message : "Could not validate Canton access");
+      });
+  }, [backend, config]);
+
   async function run(label: string, task: () => Promise<void>) {
     setBusy(label);
     setError(null);
@@ -269,12 +326,30 @@ export function LensProvider({ children }: { children: ReactNode }) {
     setConnection("connecting");
     try {
       await run("Validating participant", async () => {
-        await api("/api/connect/validate", config);
+        const result = await api<{ resolvedPartyId?: string }>("/api/connect/validate", config);
+        if (result.resolvedPartyId) {
+          setConfig((current) => ({ ...current, partyId: result.resolvedPartyId! }));
+        }
       });
       setConnection("connected");
     } catch {
       setConnection("error");
     }
+  }
+
+  async function login() {
+    setConnection("connecting");
+    setError(null);
+    await beginLogin("/app/analyze");
+  }
+
+  function disconnect() {
+    const hasProviderSession = Boolean(getAuthSession());
+    setConfig((current) => ({ ...current, bearerToken: "" }));
+    setConnection("disconnected");
+    setAuth("unauthenticated");
+    clearAuthSession();
+    if (hasProviderSession) logoutFromProvider();
   }
 
   async function loadDemo() {
@@ -308,10 +383,13 @@ export function LensProvider({ children }: { children: ReactNode }) {
     config,
     setConfig,
     connection,
+    auth,
     backend,
     busy,
     error,
     validate,
+    login,
+    disconnect,
     loadDemo,
     loadContracts,
     analyzeUpdateIds,

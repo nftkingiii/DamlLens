@@ -13,6 +13,7 @@ import { Route as ModelRouteImport } from './routes/model'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AppTimelineRouteImport } from './routes/app.timeline'
 import { Route as AppRawDataRouteImport } from './routes/app.raw-data'
 import { Route as AppPartiesRouteImport } from './routes/app.parties'
@@ -39,6 +40,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRoute,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppTimelineRoute = AppTimelineRouteImport.update({
   id: '/timeline',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/app/parties': typeof AppPartiesRoute
   '/app/raw-data': typeof AppRawDataRoute
   '/app/timeline': typeof AppTimelineRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRoutesByTo {
@@ -92,6 +99,7 @@ export interface FileRoutesByTo {
   '/app/parties': typeof AppPartiesRoute
   '/app/raw-data': typeof AppRawDataRoute
   '/app/timeline': typeof AppTimelineRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/app': typeof AppIndexRoute
 }
 export interface FileRoutesById {
@@ -105,6 +113,7 @@ export interface FileRoutesById {
   '/app/parties': typeof AppPartiesRoute
   '/app/raw-data': typeof AppRawDataRoute
   '/app/timeline': typeof AppTimelineRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
@@ -119,6 +128,7 @@ export interface FileRouteTypes {
     | '/app/parties'
     | '/app/raw-data'
     | '/app/timeline'
+    | '/auth/callback'
     | '/app/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
     | '/app/parties'
     | '/app/raw-data'
     | '/app/timeline'
+    | '/auth/callback'
     | '/app'
   id:
     | '__root__'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/app/parties'
     | '/app/raw-data'
     | '/app/timeline'
+    | '/auth/callback'
     | '/app/'
   fileRoutesById: FileRoutesById
 }
@@ -149,6 +161,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   ModelRoute: typeof ModelRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -180,6 +193,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/'
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/app/timeline': {
       id: '/app/timeline'
@@ -252,6 +272,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   ModelRoute: ModelRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
