@@ -156,6 +156,13 @@ const server = http.createServer(async (req, res) => {
     sendJson(res, 200, result);
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
+    console.error("Request failed", {
+      method: req.method,
+      path: req.url,
+      status,
+      message: error.message,
+      details: error.details
+    });
     sendJson(res, status, {
       error: error.message || "Internal server error",
       details: error.details,

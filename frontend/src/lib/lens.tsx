@@ -198,8 +198,18 @@ async function api<T>(
       ...body,
     }),
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`);
+  const payload = (await response.json().catch(() => ({}))) as {
+    error?: string;
+    details?: { stderr?: string; stdout?: string; service?: string };
+  };
+  if (!response.ok) {
+    const grpcDetail = payload.details?.stderr || payload.details?.stdout;
+    throw new Error(
+      grpcDetail
+        ? `${payload.error || "Canton request failed"}: ${grpcDetail}`
+        : payload.error || `Request failed (${response.status})`,
+    );
+  }
   return payload as T;
 }
 
