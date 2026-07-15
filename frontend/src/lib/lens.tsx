@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   beginLogin,
+  clearAuthSession,
   getAuthSession,
   logout as logoutFromProvider,
   refreshAuthSession,
@@ -227,6 +228,7 @@ type LensContextValue = {
   disconnect: () => void;
   loadDemo: () => Promise<void>;
   loadContracts: () => Promise<void>;
+  createInvoiceWorkflow: (mode: "personal" | "shared", buyerPartyId?: string) => Promise<void>;
   analyzeUpdateIds: (ids: string[]) => Promise<void>;
 };
 
@@ -378,6 +380,20 @@ export function LensProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  async function createInvoiceWorkflow(mode: "personal" | "shared", buyerPartyId?: string) {
+    await run(
+      mode === "shared" ? "Starting shared workflow" : "Creating your DevNet sample",
+      async () => {
+        const result = await api<{ analysis: Analysis }>("/api/workflows/invoice/start", config, {
+          mode,
+          ...(buyerPartyId ? { buyerPartyId } : {}),
+        });
+        setAnalysis(result.analysis);
+        setConnection("connected");
+      },
+    );
+  }
+
   async function analyzeUpdateIds(ids: string[]) {
     await run("Analyzing ledger updates", async () => {
       const result = await api<{ analysis: Analysis }>("/api/analyze/updates", config, {
@@ -402,6 +418,7 @@ export function LensProvider({ children }: { children: ReactNode }) {
     disconnect,
     loadDemo,
     loadContracts,
+    createInvoiceWorkflow,
     analyzeUpdateIds,
   };
   return <LensContext.Provider value={value}>{children}</LensContext.Provider>;

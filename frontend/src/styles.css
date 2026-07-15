@@ -1212,8 +1212,9 @@ svg {
 }
 .analyze-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(300px, 0.7fr);
+  grid-template-columns: minmax(340px, 0.8fr) minmax(520px, 1.2fr);
   gap: 18px;
+  align-items: start;
 }
 .connection-panel {
   padding: 25px;
@@ -1293,6 +1294,10 @@ svg {
 .connected-session-main .connection-dot {
   width: 10px;
   height: 10px;
+}
+.session-actions {
+  display: flex;
+  margin-top: 18px;
 }
 .mono-value {
   max-width: 100%;
@@ -2676,8 +2681,156 @@ svg {
 /* Analyze */
 .analysis-options {
   display: grid;
-  grid-template-rows: auto 1fr;
   gap: 18px;
+}
+.path-picker {
+  padding: 24px;
+}
+.path-picker-heading {
+  margin-bottom: 18px;
+}
+.path-picker-heading h2 {
+  margin-top: 8px;
+}
+.path-picker-heading p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.path-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  color: #c7adff;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+.path-progress svg {
+  width: 14px;
+  height: 14px;
+}
+.workflow-path {
+  width: 100%;
+  min-height: 92px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 18px;
+  align-items: start;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: inherit;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.012);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+.workflow-path + .workflow-path {
+  margin-top: 10px;
+}
+button.workflow-path {
+  cursor: pointer;
+}
+button.workflow-path:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(169, 119, 255, 0.42);
+  background: rgba(139, 92, 246, 0.055);
+}
+button.workflow-path:focus-visible {
+  outline: 2px solid #a977ff;
+  outline-offset: 2px;
+}
+button.workflow-path:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+.workflow-path.recommended {
+  border-color: rgba(169, 119, 255, 0.34);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(255, 255, 255, 0.015));
+}
+.path-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(169, 119, 255, 0.24);
+  border-radius: 5px;
+  color: #b58dff;
+  background: rgba(139, 92, 246, 0.08);
+}
+.path-icon svg,
+.workflow-path > svg {
+  width: 17px;
+  height: 17px;
+}
+.workflow-path > svg {
+  margin-top: 10px;
+  color: var(--quiet);
+}
+.workflow-path strong,
+.workflow-path small,
+.path-meta {
+  display: block;
+}
+.workflow-path strong {
+  margin-top: 5px;
+  color: #f4f0f7;
+  font-size: 13px;
+  font-weight: 600;
+}
+.workflow-path small {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+.path-meta {
+  color: #a987f4;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  text-transform: uppercase;
+}
+.shared-path {
+  grid-template-columns: 38px minmax(0, 1fr);
+}
+.party-input {
+  display: block;
+  margin-top: 14px;
+}
+.party-input > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--quiet);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  text-transform: uppercase;
+}
+.party-input input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  outline: none;
+  color: #ebe6ef;
+  background: #0d0b13;
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.party-input input:focus {
+  border-color: rgba(169, 119, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.11);
+}
+.shared-path .button {
+  margin-top: 10px;
+}
+.update-option {
+  min-height: auto;
 }
 .input-option {
   padding: 24px;

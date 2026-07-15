@@ -156,6 +156,27 @@ Content-Type: application/json
 {}
 ```
 
+### Start and immediately analyze a user-scoped workflow
+
+The personal mode executes the full sample path with the connected user's primary party in every
+role. Shared mode creates the initial Invoice with another party as buyer and stops until that buyer
+authorizes the next choice.
+
+```http
+POST /api/workflows/invoice/start
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "mode": "personal" }
+```
+
+```json
+{
+  "mode": "shared",
+  "buyerPartyId": "buyer-party::namespace"
+}
+```
+
 Optional body:
 
 ```json
