@@ -46,7 +46,14 @@ function AlertsPage() {
                   </span>
                 </div>
                 <footer>
-                  <code>{compactId(alert.contractId, 12)}</code>
+                  <div className="alert-evidence-ids">
+                    <code>
+                      contract {compactId(alert.evidence?.contractId || alert.contractId, 10)}
+                    </code>
+                    {alert.evidence?.updateId && (
+                      <code>update {compactId(alert.evidence.updateId, 10)}</code>
+                    )}
+                  </div>
                   <Link to="/app/timeline" className="text-link">
                     Open evidence <ArrowRight />
                   </Link>

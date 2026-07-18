@@ -175,7 +175,8 @@ function buildAlerts(activeContracts, events) {
         contractId: contract.contractId,
         template: contract.template,
         description: "The workflow reached OverdueInvoice after FundInvoice was archived through FlagOverdue.",
-        recommendedAction: "Review buyer payment status and resolve the overdue invoice path."
+        recommendedAction: "Review buyer payment status and resolve the overdue invoice path.",
+        evidence: evidenceForContract(contract, events)
       });
     }
     if (contract.template === "CollateralActionRequired") {
@@ -200,15 +201,48 @@ function buildAlerts(activeContracts, events) {
     }
   }
 
+  for (const contract of activeContracts) {
+    if (!contract.createdAt) continue;
+    const hoursInState = Math.max(0, (Date.now() - new Date(contract.createdAt).getTime()) / 3_600_000);
+    if (hoursInState < 24 || RISKY_TEMPLATES.has(contract.template)) continue;
+    alerts.push({
+      severity: hoursInState >= 72 ? "warning" : "info",
+      title: `${contract.template} has been active for ${Math.floor(hoursInState)} hours`,
+      contractId: contract.contractId,
+      template: contract.template,
+      description: "This contract has remained in the same visible state longer than the default 24-hour threshold.",
+      recommendedAction: "Confirm whether the workflow is waiting on an expected party or needs follow-up.",
+      evidence: evidenceForContract(contract, events),
+      rule: { type: "time-in-state", thresholdHours: 24, actualHours: Math.floor(hoursInState) }
+    });
+  }
+
   if (!alerts.length && events.length) {
     alerts.push({
       severity: "info",
       title: "Workflow activity loaded",
       description: "DamlLens parsed ledger events and found no active risk template.",
-      recommendedAction: "Open the timeline to inspect created and archived contracts."
+      recommendedAction: "Open the timeline to inspect created and archived contracts.",
+      evidence: events.at(-1)
+        ? {
+            updateId: events.at(-1).updateId,
+            contractId: events.at(-1).contractId,
+            commandId: events.at(-1).commandId
+          }
+        : null
     });
   }
   return alerts;
+}
+
+function evidenceForContract(contract, events) {
+  const event = [...events].reverse().find((item) => item.contractId === contract.contractId);
+  return {
+    contractId: contract.contractId,
+    updateId: event?.updateId || contract.lastUpdateId || null,
+    commandId: event?.commandId || null,
+    offset: event?.offset || contract.lastOffset || null
+  };
 }
 
 function summarize(latestActive, alerts, activeContracts, archivedContracts) {

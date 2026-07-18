@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { config } from "../config.js";
 import { HttpError, makeCommandId } from "../http.js";
 
 function assertToken(token) {
@@ -12,6 +13,13 @@ function runGrpcurl({ grpcApi, bearerToken, service, body }) {
     const child = spawn("grpcurl", args, { shell: false });
     let stdout = "";
     let stderr = "";
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill("SIGKILL");
+      reject(new HttpError(504, "Canton gRPC request timed out", { service }));
+    }, config.grpcTimeoutMs);
 
     child.stdout.on("data", (chunk) => {
       stdout += chunk.toString();
@@ -20,9 +28,14 @@ function runGrpcurl({ grpcApi, bearerToken, service, body }) {
       stderr += chunk.toString();
     });
     child.on("error", (error) => {
+      settled = true;
+      clearTimeout(timeout);
       reject(new HttpError(500, "Failed to run grpcurl. Install grpcurl or add it to PATH.", { error: error.message }));
     });
     child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
       if (code !== 0) {
         reject(new HttpError(502, "gRPC request failed", { service, stderr: stderr.trim(), stdout: stdout.trim() }));
         return;
@@ -65,6 +78,15 @@ export class CantonClient {
       grpcApi: this.grpcApi,
       bearerToken: this.bearerToken,
       service: "com.daml.ledger.api.v2.admin.UserManagementService.GetUser",
+      body: {}
+    });
+  }
+
+  async listPackages() {
+    return runGrpcurl({
+      grpcApi: this.grpcApi,
+      bearerToken: this.bearerToken,
+      service: "com.daml.ledger.api.v2.PackageService.ListPackages",
       body: {}
     });
   }

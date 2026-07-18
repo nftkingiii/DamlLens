@@ -37,7 +37,7 @@ export function LensShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const { connection, backend, analysis, config, busy, loadDemo } = useLens();
+  const { connection, backend, analysis, config, busy, loadContracts } = useLens();
 
   return (
     <SidebarContext.Provider value={{ collapsed }}>
@@ -173,7 +173,7 @@ export function LensShell({ children }: { children: ReactNode }) {
             <div className="topbar-actions">
               <button
                 className="icon-button"
-                onClick={() => loadDemo()}
+                onClick={() => loadContracts()}
                 disabled={backend !== "online" || !config.bearerToken || !!busy}
                 aria-label="Refresh workflow"
                 title="Refresh workflow"

@@ -8,14 +8,20 @@ import {
   History,
   ShieldCheck,
   Sparkles,
+  Send,
+  Star,
 } from "lucide-react";
+import { useState } from "react";
 import { PageHeader, StatusBadge } from "@/components/lens-shell";
 import { compactId, formatDate, useLens } from "@/lib/lens";
 
 export const Route = createFileRoute("/app/")({ component: OverviewPage });
 
 function OverviewPage() {
-  const { analysis, config } = useLens();
+  const { analysis, config, submitFeedback, busy } = useLens();
+  const [rating, setRating] = useState(0);
+  const [feedback, setFeedback] = useState("");
+  const [sent, setSent] = useState(false);
   const critical = analysis.summary.health === "critical";
   const latestEvent = analysis.timeline.at(-1);
   const previousEvent = analysis.timeline.at(-2);
@@ -187,6 +193,42 @@ function OverviewPage() {
               Inspect raw evidence <ArrowRight />
             </Link>
           </div>
+        </div>
+      </section>
+      <section className="panel feedback-panel">
+        <div>
+          <span className="eyebrow">Product feedback</span>
+          <h2>Did this make the workflow easier to understand?</h2>
+          <p>Your feedback helps prioritize the next DamlLens workflow and operator features.</p>
+        </div>
+        <div className="feedback-form">
+          <div className="rating-row" aria-label="Feedback rating">
+            {[1, 2, 3, 4, 5].map((value) => (
+              <button
+                key={value}
+                className={rating >= value ? "active" : ""}
+                onClick={() => setRating(value)}
+                aria-label={`${value} out of 5`}
+              >
+                <Star />
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={feedback}
+            onChange={(event) => setFeedback(event.target.value)}
+            placeholder="What worked, and what is still missing?"
+          />
+          <button
+            className="button primary compact"
+            disabled={!rating || !feedback.trim() || !!busy || sent}
+            onClick={async () => {
+              await submitFeedback(rating, feedback);
+              setSent(true);
+            }}
+          >
+            <Send /> {sent ? "Feedback sent" : "Send feedback"}
+          </button>
         </div>
       </section>
     </div>

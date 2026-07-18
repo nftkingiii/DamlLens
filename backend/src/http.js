@@ -7,9 +7,14 @@ export class HttpError extends Error {
   }
 }
 
-export async function readJson(req) {
+export async function readJson(req, maxBytes = 1_000_000) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > maxBytes) throw new HttpError(413, "Request body is too large");
+    chunks.push(chunk);
+  }
   const raw = Buffer.concat(chunks).toString("utf8");
   if (!raw.trim()) return {};
   try {
@@ -19,13 +24,17 @@ export async function readJson(req) {
   }
 }
 
-export function sendJson(res, status, body) {
-  res.writeHead(status, {
+export function sendJson(res, status, body, origin, allowedOrigins = []) {
+  const headers = {
     "content-type": "application/json; charset=utf-8",
-    "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET,POST,OPTIONS",
     "access-control-allow-headers": "content-type,authorization"
-  });
+  };
+  if (origin && allowedOrigins.includes(origin)) {
+    headers["access-control-allow-origin"] = origin;
+    headers.vary = "Origin";
+  }
+  res.writeHead(status, headers);
   res.end(JSON.stringify(body, null, 2));
 }
 

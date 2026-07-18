@@ -2,6 +2,20 @@
 
 DamlLens turns Canton/Daml ledger activity into readable workflow timelines, contract state, party authority, and risk alerts.
 
+## Product capabilities
+
+- Secure Noders OIDC login with automatic primary-party resolution.
+- User-scoped active-contract discovery with optional 15-second live refresh.
+- Generated action inbox based on Daml controller roles and connected-party authority.
+- Multi-party invoice progression across supplier, buyer, and financier sessions.
+- Timeline, contract inventory, party-role map, and normalized ledger evidence.
+- Evidence-linked risk and time-in-state alerts.
+- Connected package verification and an interpreted workflow manifest.
+- Local snapshots, Markdown report export, native sharing, and product feedback.
+- Production origin restrictions, endpoint pinning, rate limits, payload caps, and gRPC timeouts.
+
+Unknown templates still receive generic event and contract interpretation. Rich choice generation requires a reviewed workflow manifest; the included manifest covers `DamlLens.InvoiceFinance`. Arbitrary DAR semantic decoding remains a future extension because it requires a Daml-LF package decoder rather than guessing from archive bytes.
+
 ## Project layout
 
 - `frontend/` - React and TanStack Start landing page and product UI.

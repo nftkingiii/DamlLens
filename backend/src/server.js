@@ -2,9 +2,13 @@ import http from "node:http";
 import { config, resolveRuntimeConfig } from "./config.js";
 import { CantonClient, field, value } from "./canton/client.js";
 import { analyzeActiveContracts, analyzeUpdates } from "./analysis/workflowAnalyzer.js";
+import { WORKFLOW_MODEL, availableActions, findChoice } from "./analysis/workflowModel.js";
 import { HttpError, getBearerToken, readJson, requireFields, sendJson } from "./http.js";
+import { cleanText, requireLedgerId, requirePartyId } from "./validation.js";
 
 const routes = new Map();
+const requestBuckets = new Map();
+const feedbackStore = [];
 
 route("GET", "/health", async () => ({
   ok: true,
@@ -13,13 +17,25 @@ route("GET", "/health", async () => ({
 }));
 
 route("GET", "/api/config", async () => ({
-  grpcApi: config.grpcApi,
-  jsonApi: config.jsonApi,
-  partyId: config.partyId,
   packageId: config.packageId,
   workflowId: config.workflowId,
-  liveDemoUpdateIds: config.liveInvoiceUpdateIds
+  liveDemoAvailable: Object.values(config.liveInvoiceUpdateIds).every(Boolean)
 }));
+
+route("GET", "/api/model/catalog", async () => WORKFLOW_MODEL);
+
+route("POST", "/api/model/packages", async ({ req, body }) => {
+  const runtime = runtimeFromRequest(req, body);
+  const client = new CantonClient(runtime);
+  const packages = await client.listPackages();
+  const packageIds = packages.package_ids || packages.packageIds || [];
+  return {
+    selectedPackageId: runtime.packageId,
+    installed: packageIds.includes(runtime.packageId),
+    packageCount: packageIds.length,
+    packageIds
+  };
+});
 
 route("POST", "/api/connect/validate", async ({ req, body }) => {
   const runtime = runtimeFromRequest(req, body);
@@ -35,8 +51,7 @@ route("POST", "/api/connect/validate", async ({ req, body }) => {
 });
 
 route("POST", "/api/contracts/active", async ({ req, body }) => {
-  const runtime = runtimeFromRequest(req, body);
-  const client = new CantonClient(runtime);
+  const { runtime, client } = await clientForPrimaryParty(req, body);
   const templateId = body.template
     ? {
         packageId: body.template.packageId || runtime.packageId,
@@ -45,14 +60,74 @@ route("POST", "/api/contracts/active", async ({ req, body }) => {
       }
     : undefined;
   const contracts = await client.getActiveContracts({ partyId: runtime.partyId, templateId });
+  const analysis = analyzeActiveContracts(contracts);
   return {
     raw: contracts,
-    analysis: analyzeActiveContracts(contracts)
+    analysis,
+    actions: availableActions(analysis.contracts, runtime.partyId),
+    discoveredAt: new Date().toISOString()
+  };
+});
+
+route("POST", "/api/actions/available", async ({ req, body }) => {
+  const { runtime, client } = await clientForPrimaryParty(req, body);
+  const contracts = await client.getActiveContracts({ partyId: runtime.partyId });
+  const analysis = analyzeActiveContracts(contracts);
+  return {
+    actions: availableActions(analysis.contracts, runtime.partyId),
+    contractCount: analysis.contracts.length,
+    discoveredAt: new Date().toISOString()
+  };
+});
+
+route("POST", "/api/actions/exercise", async ({ req, body }) => {
+  requireFields(body, ["contractId", "template", "choice"]);
+  const { runtime, client } = await clientForPrimaryParty(req, body);
+  const contractsResponse = await client.getActiveContracts({ partyId: runtime.partyId });
+  const analysis = analyzeActiveContracts(contractsResponse);
+  const allowed = availableActions(analysis.contracts, runtime.partyId).find(
+    (item) =>
+      item.contractId === body.contractId &&
+      item.template === body.template &&
+      item.choice === body.choice
+  );
+  if (!allowed) {
+    throw new HttpError(403, "This choice is not currently available to the connected party");
+  }
+
+  const choiceModel = findChoice(body.template, body.choice);
+  const supplied = body.arguments || {};
+  const fields = choiceModel.arguments.map((argument) => {
+    const raw = supplied[argument.name];
+    if (argument.type === "party") {
+      return field(argument.name, value("party", requirePartyId(raw, argument.name)));
+    }
+    return field(
+      argument.name,
+      value("text", cleanText(raw, { fieldName: argument.name, required: argument.required }))
+    );
+  });
+
+  const result = await client.submitExercise({
+    moduleName: WORKFLOW_MODEL.moduleName,
+    entityName: body.template,
+    contractId: body.contractId,
+    choice: body.choice,
+    fields,
+    commandIdPrefix: body.choice.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase()
+  });
+  const updateId = requireUpdateId(result);
+  const update = await client.getUpdateById(updateId, runtime.partyId);
+  return {
+    updateId,
+    analysis: analyzeUpdates(update),
+    message: `${body.choice} was authorized and recorded on Canton DevNet.`
   };
 });
 
 route("POST", "/api/updates/get", async ({ req, body }) => {
   requireFields(body, ["updateId"]);
+  requireLedgerId(body.updateId);
   const runtime = runtimeFromRequest(req, body);
   const client = new CantonClient(runtime);
   const update = await client.getUpdateById(body.updateId, runtime.partyId);
@@ -64,6 +139,10 @@ route("POST", "/api/updates/get", async ({ req, body }) => {
 
 route("POST", "/api/analyze/updates", async ({ req, body }) => {
   requireFields(body, ["updateIds"]);
+  if (!Array.isArray(body.updateIds) || body.updateIds.length > 100) {
+    throw new HttpError(400, "updateIds must be an array with no more than 100 items");
+  }
+  body.updateIds.forEach((id) => requireLedgerId(id));
   const runtime = runtimeFromRequest(req, body);
   const client = new CantonClient(runtime);
   const updates = [];
@@ -87,6 +166,30 @@ route("POST", "/api/demo/live-invoice", async ({ req, body }) => {
   };
 });
 
+route("POST", "/api/feedback", async ({ body }) => {
+  const feedback = {
+    id: crypto.randomUUID(),
+    rating: Number(body.rating || 0),
+    message: cleanText(body.message, { fieldName: "message", maxLength: 2000, required: true }),
+    workflowId: cleanText(body.workflowId, { fieldName: "workflowId", maxLength: 200 }),
+    createdAt: new Date().toISOString()
+  };
+  if (feedback.rating < 1 || feedback.rating > 5) {
+    throw new HttpError(400, "rating must be between 1 and 5");
+  }
+  feedbackStore.unshift(feedback);
+  feedbackStore.splice(100);
+  if (config.feedbackWebhookUrl) {
+    const response = await fetch(config.feedbackWebhookUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(feedback)
+    });
+    if (!response.ok) throw new HttpError(502, "Feedback delivery failed");
+  }
+  return { ok: true, id: feedback.id };
+});
+
 route("POST", "/api/workflows/invoice/start", async ({ req, body }) => {
   const runtime = runtimeFromRequest(req, body);
   const sessionClient = new CantonClient(runtime);
@@ -100,9 +203,7 @@ route("POST", "/api/workflows/invoice/start", async ({ req, body }) => {
   if (mode === "shared" && !buyer) {
     throw new HttpError(400, "buyerPartyId is required for a shared workflow");
   }
-  if (mode === "shared" && !buyer.includes("::")) {
-    throw new HttpError(400, "buyerPartyId must be a complete Canton party id");
-  }
+  if (mode === "shared") requirePartyId(buyer, "buyerPartyId");
 
   const commonFields = [
     field("supplier", value("party", party)),
@@ -217,6 +318,15 @@ function runtimeFromRequest(req, body) {
   });
 }
 
+async function clientForPrimaryParty(req, body) {
+  const baseRuntime = runtimeFromRequest(req, body);
+  const sessionClient = new CantonClient(baseRuntime);
+  const user = await sessionClient.getUser();
+  const partyId = requirePartyId(user.user?.primary_party, "primary party");
+  const runtime = { ...baseRuntime, partyId };
+  return { runtime, client: new CantonClient(runtime), user: user.user };
+}
+
 function requireUpdateId(result) {
   const updateId = result?.update_id || result?.updateId;
   if (!updateId) throw new HttpError(502, "Canton accepted the command but returned no update id", result);
@@ -237,8 +347,13 @@ function daysFromUnixEpoch(daysAhead = 0) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    const origin = req.headers.origin;
+    if (origin && !config.allowedOrigins.includes(origin)) {
+      throw new HttpError(403, "Origin is not allowed");
+    }
+    enforceRateLimit(req);
     if (req.method === "OPTIONS") {
-      sendJson(res, 204, {});
+      sendJson(res, 204, {}, origin, config.allowedOrigins);
       return;
     }
 
@@ -248,7 +363,7 @@ const server = http.createServer(async (req, res) => {
 
     const body = req.method === "GET" ? {} : await readJson(req);
     const result = await handler({ req, res, body, url });
-    sendJson(res, 200, result);
+    sendJson(res, 200, result, origin, config.allowedOrigins);
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
     console.error("Request failed", {
@@ -260,11 +375,35 @@ const server = http.createServer(async (req, res) => {
     });
     sendJson(res, status, {
       error: error.message || "Internal server error",
-      details: error.details,
+      details: sanitizeDetails(error.details),
       stack: process.env.NODE_ENV === "development" ? error.stack : undefined
-    });
+    }, req.headers.origin, config.allowedOrigins);
   }
 });
+
+function enforceRateLimit(req) {
+  const now = Date.now();
+  const key = req.socket.remoteAddress || "unknown";
+  const bucket = requestBuckets.get(key);
+  if (!bucket || now - bucket.startedAt >= 60_000) {
+    requestBuckets.set(key, { startedAt: now, count: 1 });
+    return;
+  }
+  bucket.count += 1;
+  if (bucket.count > config.rateLimitPerMinute) {
+    throw new HttpError(429, "Too many requests. Try again shortly.");
+  }
+}
+
+function sanitizeDetails(details) {
+  if (!details || process.env.NODE_ENV === "development") return details;
+  if (typeof details !== "object") return undefined;
+  return {
+    service: details.service,
+    error: details.error,
+    stderr: typeof details.stderr === "string" ? details.stderr.slice(0, 1200) : undefined
+  };
+}
 
 server.listen(config.port, config.host, () => {
   console.log(`DamlLens backend listening on http://${config.host}:${config.port}`);

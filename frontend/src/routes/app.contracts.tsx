@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Copy, Search } from "lucide-react";
+import { ArrowRight, Copy, Loader2, Play, RefreshCw, Search, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PageHeader, StatusBadge } from "@/components/lens-shell";
 import { compactId, formatDate, useLens } from "@/lib/lens";
@@ -7,9 +7,20 @@ import { compactId, formatDate, useLens } from "@/lib/lens";
 export const Route = createFileRoute("/app/contracts")({ component: ContractsPage });
 
 function ContractsPage() {
-  const { analysis } = useLens();
+  const {
+    analysis,
+    actions,
+    exerciseAction,
+    loadContracts,
+    liveDiscovery,
+    setLiveDiscovery,
+    lastDiscoveredAt,
+    connection,
+    busy,
+  } = useLens();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
+  const [actionValues, setActionValues] = useState<Record<string, Record<string, string>>>({});
   const contracts = useMemo(
     () =>
       analysis.contracts.filter(
@@ -27,6 +38,99 @@ function ContractsPage() {
         description="Inspect active and archived contracts without searching raw responses or indexer tables."
         actions={<StatusBadge status={`${contracts.length} shown`} />}
       />
+      <section className="panel action-inbox">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Action inbox</span>
+            <h2>Choices your party can authorize</h2>
+            <p>
+              DamlLens derives these actions from the active contract, its controller roles, and
+              your connected Canton party.
+            </p>
+          </div>
+          <div className="inbox-controls">
+            <label className="live-toggle">
+              <input
+                type="checkbox"
+                checked={liveDiscovery}
+                onChange={(event) => setLiveDiscovery(event.target.checked)}
+              />
+              <span>Live discovery</span>
+            </label>
+            <button
+              className="icon-button"
+              onClick={() => loadContracts()}
+              disabled={connection !== "connected" || !!busy}
+              aria-label="Refresh visible contracts"
+              title="Refresh visible contracts"
+            >
+              <RefreshCw className={busy ? "spin" : ""} />
+            </button>
+          </div>
+        </div>
+        {lastDiscoveredAt && (
+          <p className="discovery-time">Last checked {formatDate(lastDiscoveredAt)}</p>
+        )}
+        <div className="action-list">
+          {actions.map((action) => {
+            const values = actionValues[action.id] || {};
+            const ready = action.arguments.every(
+              (argument) => !argument.required || values[argument.name]?.trim(),
+            );
+            return (
+              <article className="action-card" key={action.id}>
+                <div className="action-card-icon">
+                  <Zap />
+                </div>
+                <div className="action-card-copy">
+                  <span className="eyebrow">{action.template}</span>
+                  <h3>{action.choice}</h3>
+                  <p>{action.explanation}</p>
+                  {action.arguments.map((argument) => (
+                    <label className="action-field" key={argument.name}>
+                      <span>
+                        {argument.name} · {argument.type}
+                      </span>
+                      <input
+                        value={values[argument.name] || ""}
+                        onChange={(event) =>
+                          setActionValues((current) => ({
+                            ...current,
+                            [action.id]: { ...values, [argument.name]: event.target.value },
+                          }))
+                        }
+                        placeholder={
+                          argument.type === "party" ? "party::namespace" : `Enter ${argument.name}`
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+                <button
+                  className="button primary compact"
+                  disabled={!ready || !!busy}
+                  onClick={() => exerciseAction(action, values)}
+                >
+                  {busy === `Authorizing ${action.choice}` ? (
+                    <Loader2 className="spin" />
+                  ) : (
+                    <Play />
+                  )}
+                  Authorize <ArrowRight />
+                </button>
+              </article>
+            );
+          })}
+          {!actions.length && (
+            <div className="inbox-empty">
+              <strong>No choices currently require this party.</strong>
+              <span>
+                Refresh visible contracts or wait for another participant to advance the workflow.
+              </span>
+            </div>
+          )}
+        </div>
+      </section>
       <section className="panel contracts-panel">
         <div className="table-tools">
           <label className="search-box">

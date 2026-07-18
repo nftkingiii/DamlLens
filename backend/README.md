@@ -226,3 +226,14 @@ For `RequestFinancing`:
 - Do not put long-lived secrets in `.env`.
 - Frontend should pass short-lived bearer tokens to the backend per request.
 - For production, put this backend behind auth and restrict CORS.
+
+## Operator APIs
+
+- `POST /api/contracts/active` discovers contracts visible to the authenticated user's primary party and returns generated actions.
+- `POST /api/actions/available` returns only choices whose controller roles resolve to the authenticated party.
+- `POST /api/actions/exercise` validates the choice against the workflow manifest before submitting it to Canton.
+- `GET /api/model/catalog` returns the interpreted Daml workflow manifest used by the UI.
+- `POST /api/model/packages` verifies whether the configured package is installed on the connected participant.
+- `POST /api/feedback` accepts a rating and short product note; configure `DAMLLENS_FEEDBACK_WEBHOOK_URL` for durable delivery.
+
+Production defaults pin Canton endpoints on the backend, restrict browser origins, cap request bodies, rate-limit callers, and time out gRPC requests. Set `DAMLLENS_ALLOW_RUNTIME_ENDPOINTS=true` only for trusted local development.

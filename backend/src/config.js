@@ -27,6 +27,14 @@ export const config = {
   packageId: process.env.DAMLLENS_PACKAGE_ID || "",
   workflowId: process.env.DAMLLENS_WORKFLOW_ID || "damllens-invoice-demo",
   bearerToken: process.env.DAMLLENS_BEARER_TOKEN || "",
+  allowedOrigins: (process.env.DAMLLENS_ALLOWED_ORIGINS || "http://localhost:8080,http://localhost:5173,https://damllens.up.railway.app")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
+  allowRuntimeEndpoints: process.env.DAMLLENS_ALLOW_RUNTIME_ENDPOINTS === "true",
+  grpcTimeoutMs: Number(process.env.DAMLLENS_GRPC_TIMEOUT_MS || 30000),
+  rateLimitPerMinute: Number(process.env.DAMLLENS_RATE_LIMIT_PER_MINUTE || 120),
+  feedbackWebhookUrl: process.env.DAMLLENS_FEEDBACK_WEBHOOK_URL || "",
   liveInvoiceUpdateIds: {
     createInvoice: "12204f1f603639aebf0bfc3fbb2a7c378593d0d4b6c2bba50a445d0f635106a3081c",
     acceptInvoice: "1220b448947bbcd6de775ab4f042aacfedc6593629547f76cb080409be314e5a0584",
@@ -38,8 +46,8 @@ export const config = {
 
 export function resolveRuntimeConfig(overrides = {}) {
   return {
-    grpcApi: overrides.grpcApi || config.grpcApi,
-    jsonApi: overrides.jsonApi || config.jsonApi,
+    grpcApi: config.allowRuntimeEndpoints ? overrides.grpcApi || config.grpcApi : config.grpcApi,
+    jsonApi: config.allowRuntimeEndpoints ? overrides.jsonApi || config.jsonApi : config.jsonApi,
     partyId: overrides.partyId || config.partyId,
     packageId: overrides.packageId || config.packageId,
     workflowId: overrides.workflowId || config.workflowId,

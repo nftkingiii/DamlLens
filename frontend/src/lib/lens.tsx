@@ -43,6 +43,50 @@ export type LensAlert = {
   template?: string;
   description: string;
   recommendedAction: string;
+  evidence?: {
+    contractId?: string | null;
+    updateId?: string | null;
+    commandId?: string | null;
+    offset?: string | null;
+  } | null;
+  rule?: { type: string; thresholdHours: number; actualHours: number };
+};
+
+export type WorkflowAction = {
+  id: string;
+  contractId: string;
+  template: string;
+  choice: string;
+  controllers: string[];
+  arguments: Array<{ name: string; type: "party" | "text"; required: boolean }>;
+  creates: string;
+  explanation: string;
+};
+
+export type WorkflowModel = {
+  packageName: string;
+  moduleName: string;
+  description: string;
+  templates: Array<{
+    name: string;
+    businessState: string;
+    signatories: string[];
+    observers: string[];
+    choices: Array<{
+      name: string;
+      controllers: string[];
+      creates: string;
+      arguments: Array<{ name: string; type: string; required: boolean }>;
+      requiresMultipleParties: boolean;
+    }>;
+  }>;
+};
+
+export type SavedAnalysis = {
+  id: string;
+  name: string;
+  savedAt: string;
+  analysis: Analysis;
 };
 
 export type Analysis = {
@@ -230,6 +274,20 @@ type LensContextValue = {
   loadContracts: () => Promise<void>;
   createInvoiceWorkflow: (mode: "personal" | "shared", buyerPartyId?: string) => Promise<void>;
   analyzeUpdateIds: (ids: string[]) => Promise<void>;
+  actions: WorkflowAction[];
+  refreshActions: () => Promise<void>;
+  exerciseAction: (action: WorkflowAction, args: Record<string, string>) => Promise<void>;
+  liveDiscovery: boolean;
+  setLiveDiscovery: React.Dispatch<React.SetStateAction<boolean>>;
+  lastDiscoveredAt: string | null;
+  savedAnalyses: SavedAnalysis[];
+  saveCurrentAnalysis: (name?: string) => void;
+  openSavedAnalysis: (id: string) => void;
+  deleteSavedAnalysis: (id: string) => void;
+  model: WorkflowModel | null;
+  packageStatus: { installed: boolean; packageCount: number } | null;
+  inspectPackages: () => Promise<void>;
+  submitFeedback: (rating: number, message: string) => Promise<void>;
 };
 
 const LensContext = createContext<LensContextValue | null>(null);
@@ -242,6 +300,15 @@ export function LensProvider({ children }: { children: ReactNode }) {
   const [backend, setBackend] = useState<LensContextValue["backend"]>("checking");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [actions, setActions] = useState<WorkflowAction[]>([]);
+  const [liveDiscovery, setLiveDiscovery] = useState(false);
+  const [lastDiscoveredAt, setLastDiscoveredAt] = useState<string | null>(null);
+  const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
+  const [model, setModel] = useState<WorkflowModel | null>(null);
+  const [packageStatus, setPackageStatus] = useState<{
+    installed: boolean;
+    packageCount: number;
+  } | null>(null);
   const autoValidatedToken = useRef<string | null>(null);
 
   useEffect(() => {
@@ -261,12 +328,31 @@ export function LensProvider({ children }: { children: ReactNode }) {
       bearerToken: session?.accessToken || "",
     }));
     if (session) setAuth("authenticated");
+    const savedAnalysesRaw = window.localStorage.getItem("damllens-saved-analyses");
+    if (savedAnalysesRaw) {
+      try {
+        setSavedAnalyses(JSON.parse(savedAnalysesRaw) as SavedAnalysis[]);
+      } catch {
+        window.localStorage.removeItem("damllens-saved-analyses");
+      }
+    }
+    fetch(`${API_BASE}/api/model/catalog`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((catalog) => catalog && setModel(catalog as WorkflowModel))
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
     const { bearerToken: _secret, ...safeConfig } = config;
     window.sessionStorage.setItem("damllens-config", JSON.stringify(safeConfig));
   }, [config]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      "damllens-saved-analyses",
+      JSON.stringify(savedAnalyses.slice(0, 20)),
+    );
+  }, [savedAnalyses]);
 
   useEffect(() => {
     let active = true;
@@ -321,6 +407,25 @@ export function LensProvider({ children }: { children: ReactNode }) {
       });
   }, [backend, config]);
 
+  useEffect(() => {
+    if (!liveDiscovery || backend !== "online" || connection !== "connected") return;
+    const timer = window.setInterval(() => {
+      api<{ analysis: Analysis; actions: WorkflowAction[]; discoveredAt: string }>(
+        "/api/contracts/active",
+        config,
+      )
+        .then((result) => {
+          setAnalysis(result.analysis);
+          setActions(result.actions || []);
+          setLastDiscoveredAt(result.discoveredAt);
+        })
+        .catch((cause) =>
+          setError(cause instanceof Error ? cause.message : "Live discovery failed"),
+        );
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [backend, config, connection, liveDiscovery]);
+
   async function run(label: string, task: () => Promise<void>) {
     setBusy(label);
     setError(null);
@@ -374,8 +479,14 @@ export function LensProvider({ children }: { children: ReactNode }) {
 
   async function loadContracts() {
     await run("Loading visible contracts", async () => {
-      const result = await api<{ analysis: Analysis }>("/api/contracts/active", config);
+      const result = await api<{
+        analysis: Analysis;
+        actions: WorkflowAction[];
+        discoveredAt: string;
+      }>("/api/contracts/active", config);
       setAnalysis(result.analysis);
+      setActions(result.actions || []);
+      setLastDiscoveredAt(result.discoveredAt);
       setConnection("connected");
     });
   }
@@ -404,6 +515,63 @@ export function LensProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  async function refreshActions() {
+    const result = await api<{ actions: WorkflowAction[]; discoveredAt: string }>(
+      "/api/actions/available",
+      config,
+    );
+    setActions(result.actions || []);
+    setLastDiscoveredAt(result.discoveredAt);
+  }
+
+  async function exerciseAction(action: WorkflowAction, args: Record<string, string>) {
+    await run(`Authorizing ${action.choice}`, async () => {
+      const result = await api<{ analysis: Analysis }>("/api/actions/exercise", config, {
+        contractId: action.contractId,
+        template: action.template,
+        choice: action.choice,
+        arguments: args,
+      });
+      setAnalysis(result.analysis);
+      await refreshActions();
+    });
+  }
+
+  function saveCurrentAnalysis(name?: string) {
+    const saved: SavedAnalysis = {
+      id: crypto.randomUUID(),
+      name: name?.trim() || `${analysis.workflowId} · ${new Date().toLocaleDateString()}`,
+      savedAt: new Date().toISOString(),
+      analysis,
+    };
+    setSavedAnalyses((current) => [saved, ...current].slice(0, 20));
+  }
+
+  function openSavedAnalysis(id: string) {
+    const saved = savedAnalyses.find((item) => item.id === id);
+    if (saved) setAnalysis(saved.analysis);
+  }
+
+  function deleteSavedAnalysis(id: string) {
+    setSavedAnalyses((current) => current.filter((item) => item.id !== id));
+  }
+
+  async function inspectPackages() {
+    await run("Inspecting participant packages", async () => {
+      const result = await api<{ installed: boolean; packageCount: number }>(
+        "/api/model/packages",
+        config,
+      );
+      setPackageStatus(result);
+    });
+  }
+
+  async function submitFeedback(rating: number, message: string) {
+    await run("Sending feedback", async () => {
+      await api("/api/feedback", config, { rating, message, workflowId: analysis.workflowId });
+    });
+  }
+
   const value = {
     analysis,
     config,
@@ -420,6 +588,20 @@ export function LensProvider({ children }: { children: ReactNode }) {
     loadContracts,
     createInvoiceWorkflow,
     analyzeUpdateIds,
+    actions,
+    refreshActions,
+    exerciseAction,
+    liveDiscovery,
+    setLiveDiscovery,
+    lastDiscoveredAt,
+    savedAnalyses,
+    saveCurrentAnalysis,
+    openSavedAnalysis,
+    deleteSavedAnalysis,
+    model,
+    packageStatus,
+    inspectPackages,
+    submitFeedback,
   };
   return <LensContext.Provider value={value}>{children}</LensContext.Provider>;
 }
