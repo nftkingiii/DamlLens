@@ -4,13 +4,17 @@ import {
   CheckCircle2,
   Code2,
   Eye,
+  FileArchive,
   KeyRound,
   Loader2,
   Network,
   PackageCheck,
+  RotateCcw,
+  ShieldCheck,
+  Upload,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { LensProvider } from "@/lib/lens";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { LensProvider, compactId, useLens, type AuthorityConfidence } from "@/lib/lens";
 import { LensShell, PageHeader, StatusBadge } from "@/components/lens-shell";
 
 export const Route = createFileRoute("/model")({ component: ModelRoute });
@@ -26,15 +30,40 @@ function ModelRoute() {
 }
 
 function ModelPage() {
-  const { model, packageStatus, inspectPackages, connection, busy } = useLens();
-  const [selectedName, setSelectedName] = useState("");
-  const templates = model?.templates || [];
-  const selected = templates.find((item) => item.name === selectedName) || templates[0];
-  useEffect(() => {
-    if (!selectedName && templates[0]) setSelectedName(templates[0].name);
-  }, [selectedName, templates]);
+  const {
+    model,
+    modelSource,
+    packageStatus,
+    inspectPackages,
+    decodeDar,
+    useReviewedModel,
+    connection,
+    busy,
+  } = useLens();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [selectedId, setSelectedId] = useState("");
+  const templates = useMemo(() => model?.templates || [], [model?.templates]);
+  const selected = templates.find((item) => templateId(item) === selectedId) || templates[0];
 
-  if (!selected)
+  useEffect(() => {
+    if (templates[0] && !templates.some((item) => templateId(item) === selectedId)) {
+      setSelectedId(templateId(templates[0]));
+    }
+  }, [selectedId, templates]);
+
+  async function onDarSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      await decodeDar(file);
+    } catch {
+      // LensShell renders the shared error state.
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  if (!selected) {
     return (
       <div className="app-page">
         <div className="panel model-loading">
@@ -42,21 +71,80 @@ function ModelPage() {
         </div>
       </div>
     );
+  }
+
   const primaryChoice = selected.choices[0];
+  const confidence =
+    primaryChoice?.controllerConfidence || selected.authority?.signatory.confidence;
+
   return (
     <div className="app-page">
       <PageHeader
         eyebrow="Daml model"
-        title="The rules behind the workflow."
-        description="Inspect the connected package manifest: templates, visibility, choices, controllers, arguments, and transitions."
-        actions={
-          <StatusBadge status={packageStatus?.installed ? "Package verified" : "Model manifest"} />
-        }
+        title="Decode the rules behind a workflow."
+        description="Inspect templates, fields, visibility, choices, controllers, arguments, and likely transitions from a compiled DAR."
+        actions={<StatusBadge status={modelSource === "dar" ? "Decoded DAR" : "Reviewed model"} />}
       />
+
+      <section className="panel dar-decoder-panel">
+        <div className="decoder-icon">
+          <FileArchive />
+        </div>
+        <div className="decoder-copy">
+          <span className="eyebrow">Hybrid semantic decoder</span>
+          <h2>
+            {modelSource === "dar" ? model?.originalFilename : "Give DamlLens a compiled model"}
+          </h2>
+          <p>
+            {modelSource === "dar"
+              ? `${templates.length} templates decoded across ${model?.modules?.length || 1} module${model?.modules?.length === 1 ? "" : "s"}. Live ledger evidence can now be interpreted against this structure.`
+              : "Upload a DAR once. DamlLens validates it, decodes its Daml-LF structure, and labels authority rules by confidence."}
+          </p>
+          {modelSource === "dar" && (
+            <div className="decoder-meta">
+              <span>Package {compactId(model?.packageId, 7)}</span>
+              <span>Daml-LF {model?.damlLfVersion || "unknown"}</span>
+              <span>SDK {model?.decoder?.sdkVersion || "3.5.2"}</span>
+            </div>
+          )}
+        </div>
+        <div className="decoder-actions">
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".dar,application/octet-stream,application/zip"
+            onChange={onDarSelected}
+            className="visually-hidden"
+          />
+          <button
+            className="button primary compact"
+            onClick={() => inputRef.current?.click()}
+            disabled={!!busy}
+          >
+            {busy === "Decoding DAR" ? <Loader2 className="spin" /> : <Upload />}
+            {busy === "Decoding DAR"
+              ? "Decoding..."
+              : modelSource === "dar"
+                ? "Decode another"
+                : "Choose DAR"}
+          </button>
+          {modelSource === "dar" && (
+            <button
+              className="button secondary compact"
+              onClick={useReviewedModel}
+              disabled={!!busy}
+            >
+              <RotateCcw /> Reviewed model
+            </button>
+          )}
+          <small>Maximum 10 MB. The temporary upload is deleted after decoding.</small>
+        </div>
+      </section>
+
       <section className="panel package-verification">
         <PackageCheck />
         <div>
-          <span className="eyebrow">Connected package</span>
+          <span className="eyebrow">Selected package</span>
           <h2>{model?.packageName}</h2>
           <p>{model?.description}</p>
         </div>
@@ -82,40 +170,53 @@ function ModelPage() {
           />
         )}
       </section>
+
       <section className="model-grid">
         <div className="panel template-list">
           <div className="panel-heading">
             <div>
-              <span className="eyebrow">Module</span>
+              <span className="eyebrow">
+                {model?.modules?.length ? `${model.modules.length} modules` : "Module"}
+              </span>
               <h2>{model?.moduleName}</h2>
             </div>
             <Braces />
           </div>
           {templates.map((template) => (
             <button
-              key={template.name}
-              className={selected.name === template.name ? "active" : ""}
-              onClick={() => setSelected(template)}
+              key={templateId(template)}
+              className={templateId(selected) === templateId(template) ? "active" : ""}
+              onClick={() => setSelectedId(templateId(template))}
             >
               <Code2 />
               <span>
                 <strong>{template.name}</strong>
-                <small>{template.businessState}</small>
+                <small>{template.moduleName || template.businessState}</small>
               </span>
               <span>-&gt;</span>
             </button>
           ))}
         </div>
+
         <div className="panel model-detail">
           <div className="model-title">
             <span className="eyebrow">Selected template</span>
             <h2>{selected.name}</h2>
             <p>
-              {selected.businessState}. Visibility and actions below come from the workflow
-              manifest.
+              {selected.businessState}. The model shows static structure; live Canton data confirms
+              what actually occurred.
             </p>
+            {modelSource === "dar" && confidence && <ConfidenceBadge confidence={confidence} />}
           </div>
           <div className="model-facts">
+            <Fact
+              icon={Braces}
+              label="Fields"
+              value={
+                selected.fields?.map((item) => `${item.name}:${item.type}`).join(", ") ||
+                "Not decoded"
+              }
+            />
             <Fact
               icon={KeyRound}
               label="Choices"
@@ -129,23 +230,57 @@ function ModelPage() {
             <Fact
               icon={Network}
               label="Creates next"
-              value={primaryChoice?.creates || "No transition"}
+              value={primaryChoice?.creates || "No direct contract return"}
             />
             <Fact
               icon={Eye}
               label="Visibility"
-              value={[...selected.signatories, ...selected.observers].join(", ")}
+              value={
+                [...selected.signatories, ...selected.observers].join(", ") || "Resolved at runtime"
+              }
+            />
+            <Fact
+              icon={ShieldCheck}
+              label="Authority confidence"
+              value={
+                confidence
+                  ? `${confidence} · verified against live evidence at runtime`
+                  : "No choice authority"
+              }
             />
           </div>
           <div className="code-preview">
             <span>Interpreted Daml structure</span>
-            <pre>{`template ${selected.name}\n  signatory ${selected.signatories.join(", ") || "-"}\n  observer ${selected.observers.join(", ") || "-"}${selected.choices.map((choice) => `\n\n  choice ${choice.name}\n    controller ${choice.controllers.join(", ")}\n    creates ${choice.creates}${choice.arguments.length ? `\n    arguments ${choice.arguments.map((arg) => `${arg.name}:${arg.type}`).join(", ")}` : ""}`).join("")}`}</pre>
+            <pre>{renderTemplate(selected)}</pre>
           </div>
         </div>
       </section>
     </div>
   );
 }
+
+function templateId(template: { moduleName?: string; name: string }) {
+  return `${template.moduleName || "reviewed"}:${template.name}`;
+}
+
+function ConfidenceBadge({ confidence }: { confidence: AuthorityConfidence }) {
+  const copy = {
+    static: "Static authority",
+    computed: "Computed authority",
+    dynamic: "Runtime authority",
+  }[confidence];
+  return <span className={`confidence-badge ${confidence}`}>{copy}</span>;
+}
+
+function renderTemplate(
+  selected: NonNullable<ReturnType<typeof useLens>["model"]>["templates"][number],
+) {
+  const fields = selected.fields?.length
+    ? `\n  fields ${selected.fields.map((field) => `${field.name}:${field.type}`).join(", ")}`
+    : "";
+  return `template ${selected.name}${fields}\n  signatory ${selected.signatories.join(", ") || "dynamic"}\n  observer ${selected.observers.join(", ") || "none"}${selected.choices.map((choice) => `\n\n  ${choice.consuming === false ? "nonconsuming " : ""}choice ${choice.name}\n    controller ${choice.controllers.join(", ") || "resolve at runtime"}\n    confidence ${choice.controllerConfidence || "reviewed"}\n    returns ${choice.returnType || choice.creates || "Unit"}${choice.arguments.length ? `\n    arguments ${choice.arguments.map((arg) => `${arg.name}:${arg.type}`).join(", ")}` : ""}`).join("")}`;
+}
+
 function Fact({ icon: Icon, label, value }: { icon: typeof Eye; label: string; value: string }) {
   return (
     <div>

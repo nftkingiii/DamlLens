@@ -24,11 +24,26 @@ export async function readJson(req, maxBytes = 1_000_000) {
   }
 }
 
+export async function readBinary(req, maxBytes) {
+  const contentLength = Number(req.headers["content-length"] || 0);
+  if (contentLength > maxBytes) throw new HttpError(413, "DAR file is too large");
+
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > maxBytes) throw new HttpError(413, "DAR file is too large");
+    chunks.push(chunk);
+  }
+  if (!size) throw new HttpError(400, "DAR file is required");
+  return Buffer.concat(chunks);
+}
+
 export function sendJson(res, status, body, origin, allowedOrigins = []) {
   const headers = {
     "content-type": "application/json; charset=utf-8",
     "access-control-allow-methods": "GET,POST,OPTIONS",
-    "access-control-allow-headers": "content-type,authorization"
+    "access-control-allow-headers": "content-type,authorization,x-dar-filename"
   };
   if (origin && allowedOrigins.includes(origin)) {
     headers["access-control-allow-origin"] = origin;

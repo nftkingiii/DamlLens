@@ -10,11 +10,13 @@ It supports:
 - creating an Invoice workflow contract
 - exercising Invoice workflow choices
 - converting raw ledger updates into DamlLens-ready timeline, contract, party, and alert JSON
+- validating and decoding uploaded DAR files into a reusable workflow manifest
 
 ## Requirements
 
 - Node.js 20+
 - `grpcurl` installed and available on PATH
+- Daml SDK compiler `damlc` 3.5.2 available on PATH for DAR decoding
 - A short-lived HackCanton DevNet bearer token
 
 ## Setup
@@ -234,6 +236,11 @@ For `RequestFinancing`:
 - `POST /api/actions/exercise` validates the choice against the workflow manifest before submitting it to Canton.
 - `GET /api/model/catalog` returns the interpreted Daml workflow manifest used by the UI.
 - `POST /api/model/packages` verifies whether the configured package is installed on the connected participant.
+- `POST /api/model/inspect-dar` accepts a raw `application/octet-stream` DAR body (maximum 10 MB), validates it, decodes the main package, caches the resulting manifest by package ID, and deletes the temporary archive.
+- `POST /api/model/decoded` returns a previously cached manifest for a package ID.
+- `GET /api/model/decoder` reports the pinned decoder version and upload limit.
 - `POST /api/feedback` accepts a rating and short product note; configure `DAMLLENS_FEEDBACK_WEBHOOK_URL` for durable delivery.
 
 Production defaults pin Canton endpoints on the backend, restrict browser origins, cap request bodies, rate-limit callers, and time out gRPC requests. Set `DAMLLENS_ALLOW_RUNTIME_ENDPOINTS=true` only for trusted local development.
+
+DAR authority readings use three confidence levels: `static` for direct contract-field authority, `computed` for expressions that depend on contract values, and `dynamic` when static reduction would be unsafe. Runtime ledger signatories and witnesses remain the final evidence of what actually happened.

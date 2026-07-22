@@ -17,10 +17,10 @@ const STATUS_BY_TEMPLATE = {
 
 const RISKY_TEMPLATES = new Set(["OverdueInvoice", "CollateralActionRequired", "RepaymentObligation"]);
 
-export function analyzeUpdates(updateResponses) {
+export function analyzeUpdates(updateResponses, options = {}) {
   const updates = Array.isArray(updateResponses) ? updateResponses : [updateResponses];
   const events = updates.flatMap(extractEvents).sort((a, b) => Number(a.offset || 0) - Number(b.offset || 0));
-  const contracts = buildContractStates(events);
+  const contracts = buildContractStates(events, options.modelResolver);
   const activeContracts = contracts.filter((contract) => contract.status === "active");
   const archivedContracts = contracts.filter((contract) => contract.status === "archived");
   const latestActive = activeContracts.at(-1) || contracts.at(-1) || null;
@@ -37,14 +37,14 @@ export function analyzeUpdates(updateResponses) {
       alerts: alerts.length
     },
     currentState: latestActive,
-    timeline: events.map(toTimelineItem),
+    timeline: events.map((event) => toTimelineItem(event, options.modelResolver)),
     contracts,
     parties: extractParties(events),
     alerts
   };
 }
 
-export function analyzeActiveContracts(activeContractsResponse) {
+export function analyzeActiveContracts(activeContractsResponse, options = {}) {
   const contracts = normalizeActiveContracts(activeContractsResponse);
   const events = contracts.map((contract, index) => ({
     kind: "created",
@@ -61,7 +61,10 @@ export function analyzeActiveContracts(activeContractsResponse) {
     signatories: contract.signatories || [],
     createdAt: contract.createdAt || null
   }));
-  return analyzeUpdates([{ transaction: { workflow_id: "active-contracts", events: events.map((event) => ({ created: denormalizeCreated(event) })) } }]);
+  return analyzeUpdates(
+    [{ transaction: { workflow_id: "active-contracts", events: events.map((event) => ({ created: denormalizeCreated(event) })) } }],
+    options,
+  );
 }
 
 function extractEvents(update) {
@@ -122,16 +125,17 @@ function denormalizeCreated(event) {
   };
 }
 
-function buildContractStates(events) {
+function buildContractStates(events, modelResolver) {
   const byId = new Map();
   for (const event of events) {
     if (event.kind === "created") {
+      const model = resolveTemplateModel(event, modelResolver);
       byId.set(event.contractId, {
         contractId: event.contractId,
         template: event.template,
         templateId: event.templateId,
         status: "active",
-        businessState: STATUS_BY_TEMPLATE[event.template] || "active",
+        businessState: model?.businessState || STATUS_BY_TEMPLATE[event.template] || "active",
         fields: event.fields,
         signatories: event.signatories,
         witnessParties: event.witnessParties,
@@ -281,7 +285,7 @@ function summarize(latestActive, alerts, activeContracts, archivedContracts) {
   };
 }
 
-function toTimelineItem(event) {
+function toTimelineItem(event, modelResolver) {
   return {
     id: `${event.updateId || "event"}-${event.index}`,
     kind: event.kind,
@@ -295,17 +299,36 @@ function toTimelineItem(event) {
     fields: event.fields,
     signatories: event.signatories,
     witnessParties: event.witnessParties,
-    explanation: explainEvent(event)
+    explanation: explainEvent(event, resolveTemplateModel(event, modelResolver))
   };
 }
 
-function explainEvent(event) {
+function explainEvent(event, templateModel) {
   if (event.kind === "archived") return `${event.template} was archived as the workflow moved to the next state.`;
   if (event.template === "OverdueInvoice") return "The workflow is now overdue because buyer payment is missing.";
   if (event.template === "FinancingRequest") return "The supplier requested financing and made the request visible to the financier.";
   if (event.template === "FundedInvoice") return "The financier funded the invoice, creating the state that waits for buyer payment or overdue handling.";
   if (event.template === "AcceptedInvoice") return "The buyer accepted the invoice, allowing financing to be requested.";
+  if (templateModel) {
+    const authority = templateModel.signatories?.length
+      ? ` Signatory fields: ${templateModel.signatories.join(", ")}.`
+      : "";
+    const choices = templateModel.choices?.length
+      ? ` Available choices: ${templateModel.choices.map((choice) => choice.name).join(", ")}.`
+      : " This is a terminal state in the decoded model.";
+    return `${event.template} became active.${authority}${choices}`;
+  }
   return `${event.template} became active.`;
+}
+
+function resolveTemplateModel(event, modelResolver) {
+  if (!modelResolver) return null;
+  const packageId = event.templateId?.package_id || event.templateId?.packageId;
+  const moduleName = event.templateId?.module_name || event.templateId?.moduleName;
+  const model = modelResolver(packageId);
+  return model?.templates?.find(
+    (template) => template.name === event.template && (!moduleName || !template.moduleName || template.moduleName === moduleName),
+  ) || null;
 }
 
 function extractParties(events) {

@@ -231,6 +231,8 @@ export function value(type, data) {
   if (type === "text") return { text: data };
   if (type === "numeric") return { numeric: data };
   if (type === "date") return { date: data };
+  if (type === "bool") return { bool: data };
+  if (type === "int64") return { int64: String(data) };
   throw new Error(`Unsupported Daml value type: ${type}`);
 }
 

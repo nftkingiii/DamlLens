@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "check": "node --check src/server.js && node --check src/canton/client.js && node --check src/analysis/workflowAnalyzer.js && node --check src/analysis/workflowModel.js && node --check src/validation.js && node --check src/config.js",
+    "check": "node --check src/server.js && node --check src/canton/client.js && node --check src/analysis/workflowAnalyzer.js && node --check src/analysis/workflowModel.js && node --check src/dar/decoder.js && node --check src/dar/parser.js && node --check src/validation.js && node --check src/config.js",
     "test": "node --test"
   },
   "engines": {

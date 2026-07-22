@@ -3,8 +3,9 @@ import { config, resolveRuntimeConfig } from "./config.js";
 import { CantonClient, field, value } from "./canton/client.js";
 import { analyzeActiveContracts, analyzeUpdates } from "./analysis/workflowAnalyzer.js";
 import { WORKFLOW_MODEL, availableActions, findChoice } from "./analysis/workflowModel.js";
-import { HttpError, getBearerToken, readJson, requireFields, sendJson } from "./http.js";
+import { HttpError, getBearerToken, readBinary, readJson, requireFields, sendJson } from "./http.js";
 import { cleanText, requireLedgerId, requirePartyId } from "./validation.js";
+import { decodeDar, decoderStatus, getDecodedManifest } from "./dar/decoder.js";
 
 const routes = new Map();
 const requestBuckets = new Map();
@@ -23,6 +24,26 @@ route("GET", "/api/config", async () => ({
 }));
 
 route("GET", "/api/model/catalog", async () => WORKFLOW_MODEL);
+
+route("GET", "/api/model/decoder", async () => decoderStatus());
+
+route("POST", "/api/model/inspect-dar", async ({ req }) => {
+  const contentType = String(req.headers["content-type"] || "").split(";", 1)[0].toLowerCase();
+  if (contentType !== "application/octet-stream" && contentType !== "application/zip") {
+    throw new HttpError(415, "DAR uploads must use application/octet-stream");
+  }
+  const buffer = await readBinary(req, config.darMaxBytes);
+  const filename = String(req.headers["x-dar-filename"] || "model.dar");
+  return decodeDar(buffer, filename);
+});
+
+route("POST", "/api/model/decoded", async ({ body }) => {
+  requireFields(body, ["packageId"]);
+  const packageId = requireLedgerId(body.packageId, "packageId");
+  const manifest = getDecodedManifest(packageId);
+  if (!manifest) throw new HttpError(404, "This package has not been decoded on this backend yet");
+  return { manifest, cached: true };
+});
 
 route("POST", "/api/model/packages", async ({ req, body }) => {
   const runtime = runtimeFromRequest(req, body);
@@ -60,11 +81,11 @@ route("POST", "/api/contracts/active", async ({ req, body }) => {
       }
     : undefined;
   const contracts = await client.getActiveContracts({ partyId: runtime.partyId, templateId });
-  const analysis = analyzeActiveContracts(contracts);
+  const analysis = analyzeActiveContracts(contracts, analysisOptions());
   return {
     raw: contracts,
     analysis,
-    actions: availableActions(analysis.contracts, runtime.partyId),
+    actions: availableActions(analysis.contracts, runtime.partyId, modelForPackage),
     discoveredAt: new Date().toISOString()
   };
 });
@@ -72,9 +93,9 @@ route("POST", "/api/contracts/active", async ({ req, body }) => {
 route("POST", "/api/actions/available", async ({ req, body }) => {
   const { runtime, client } = await clientForPrimaryParty(req, body);
   const contracts = await client.getActiveContracts({ partyId: runtime.partyId });
-  const analysis = analyzeActiveContracts(contracts);
+  const analysis = analyzeActiveContracts(contracts, analysisOptions());
   return {
-    actions: availableActions(analysis.contracts, runtime.partyId),
+    actions: availableActions(analysis.contracts, runtime.partyId, modelForPackage),
     contractCount: analysis.contracts.length,
     discoveredAt: new Date().toISOString()
   };
@@ -84,8 +105,8 @@ route("POST", "/api/actions/exercise", async ({ req, body }) => {
   requireFields(body, ["contractId", "template", "choice"]);
   const { runtime, client } = await clientForPrimaryParty(req, body);
   const contractsResponse = await client.getActiveContracts({ partyId: runtime.partyId });
-  const analysis = analyzeActiveContracts(contractsResponse);
-  const allowed = availableActions(analysis.contracts, runtime.partyId).find(
+  const analysis = analyzeActiveContracts(contractsResponse, analysisOptions());
+  const allowed = availableActions(analysis.contracts, runtime.partyId, modelForPackage).find(
     (item) =>
       item.contractId === body.contractId &&
       item.template === body.template &&
@@ -95,21 +116,13 @@ route("POST", "/api/actions/exercise", async ({ req, body }) => {
     throw new HttpError(403, "This choice is not currently available to the connected party");
   }
 
-  const choiceModel = findChoice(body.template, body.choice);
+  const workflowModel = modelForPackage(allowed.packageId);
+  const choiceModel = findChoice(body.template, body.choice, workflowModel, allowed.moduleName);
   const supplied = body.arguments || {};
-  const fields = choiceModel.arguments.map((argument) => {
-    const raw = supplied[argument.name];
-    if (argument.type === "party") {
-      return field(argument.name, value("party", requirePartyId(raw, argument.name)));
-    }
-    return field(
-      argument.name,
-      value("text", cleanText(raw, { fieldName: argument.name, required: argument.required }))
-    );
-  });
+  const fields = choiceModel.arguments.map((argument) => choiceArgumentField(argument, supplied[argument.name]));
 
   const result = await client.submitExercise({
-    moduleName: WORKFLOW_MODEL.moduleName,
+    moduleName: allowed.moduleName || WORKFLOW_MODEL.moduleName,
     entityName: body.template,
     contractId: body.contractId,
     choice: body.choice,
@@ -120,7 +133,7 @@ route("POST", "/api/actions/exercise", async ({ req, body }) => {
   const update = await client.getUpdateById(updateId, runtime.partyId);
   return {
     updateId,
-    analysis: analyzeUpdates(update),
+    analysis: analyzeUpdates(update, analysisOptions()),
     message: `${body.choice} was authorized and recorded on Canton DevNet.`
   };
 });
@@ -133,7 +146,7 @@ route("POST", "/api/updates/get", async ({ req, body }) => {
   const update = await client.getUpdateById(body.updateId, runtime.partyId);
   return {
     raw: update,
-    analysis: analyzeUpdates(update)
+    analysis: analyzeUpdates(update, analysisOptions())
   };
 });
 
@@ -149,7 +162,7 @@ route("POST", "/api/analyze/updates", async ({ req, body }) => {
   for (const updateId of body.updateIds) updates.push(await client.getUpdateById(updateId, runtime.partyId));
   return {
     updates: updates.map((update) => update.transaction?.update_id).filter(Boolean),
-    analysis: analyzeUpdates(updates)
+    analysis: analyzeUpdates(updates, analysisOptions())
   };
 });
 
@@ -162,7 +175,7 @@ route("POST", "/api/demo/live-invoice", async ({ req, body }) => {
   return {
     demo: "invoice-financing-devnet",
     updateIds,
-    analysis: analyzeUpdates(updates)
+    analysis: analyzeUpdates(updates, analysisOptions())
   };
 });
 
@@ -261,7 +274,7 @@ route("POST", "/api/workflows/invoice/start", async ({ req, body }) => {
       mode === "shared"
         ? "The buyer must connect with their own Canton party and exercise AcceptInvoice."
         : "The personal sample reached OverdueInvoice and is ready to inspect.",
-    analysis: analyzeUpdates(updates)
+    analysis: analyzeUpdates(updates, analysisOptions())
   };
 });
 
@@ -305,6 +318,45 @@ route("POST", "/api/workflows/invoice/exercise", async ({ req, body }) => {
 
 function route(method, path, handler) {
   routes.set(`${method} ${path}`, handler);
+}
+
+function modelForPackage(packageId) {
+  return getDecodedManifest(packageId) || (packageId === config.packageId ? WORKFLOW_MODEL : null);
+}
+
+function analysisOptions() {
+  return { modelResolver: modelForPackage };
+}
+
+function choiceArgumentField(argument, raw) {
+  if (argument.type === "party") {
+    return field(argument.name, value("party", requirePartyId(raw, argument.name)));
+  }
+  const cleaned = cleanText(String(raw ?? ""), {
+    fieldName: argument.name,
+    required: argument.required,
+  });
+  if (argument.type === "date") {
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(cleaned)
+      ? Math.floor(Date.parse(`${cleaned}T00:00:00Z`) / 86_400_000)
+      : Number(cleaned);
+    if (!Number.isInteger(date)) throw new HttpError(400, `${argument.name} must be a date`);
+    return field(argument.name, value("date", date));
+  }
+  if (argument.type === "bool") {
+    if (!/^(true|false)$/i.test(cleaned)) throw new HttpError(400, `${argument.name} must be true or false`);
+    return field(argument.name, value("bool", cleaned.toLowerCase() === "true"));
+  }
+  if (argument.type === "int64") {
+    if (!/^-?\d+$/.test(cleaned)) throw new HttpError(400, `${argument.name} must be an integer`);
+    return field(argument.name, value("int64", cleaned));
+  }
+  if (argument.type === "numeric") {
+    if (!/^-?\d+(?:\.\d+)?$/.test(cleaned)) throw new HttpError(400, `${argument.name} must be numeric`);
+    return field(argument.name, value("numeric", cleaned));
+  }
+  if (argument.type !== "text") throw new HttpError(400, `${argument.name} uses an unsupported Daml type`);
+  return field(argument.name, value("text", cleaned));
 }
 
 function runtimeFromRequest(req, body) {
@@ -361,7 +413,7 @@ const server = http.createServer(async (req, res) => {
     const handler = routes.get(`${req.method} ${url.pathname}`);
     if (!handler) throw new HttpError(404, "Route not found", { method: req.method, path: url.pathname });
 
-    const body = req.method === "GET" ? {} : await readJson(req);
+    const body = req.method === "GET" || url.pathname === "/api/model/inspect-dar" ? {} : await readJson(req);
     const result = await handler({ req, res, body, url });
     sendJson(res, 200, result, origin, config.allowedOrigins);
   } catch (error) {

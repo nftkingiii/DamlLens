@@ -58,28 +58,60 @@ export type WorkflowAction = {
   template: string;
   choice: string;
   controllers: string[];
-  arguments: Array<{ name: string; type: "party" | "text"; required: boolean }>;
+  arguments: Array<{
+    name: string;
+    type: "party" | "text" | "numeric" | "date" | "bool" | "int64";
+    required: boolean;
+  }>;
+  packageId?: string;
+  moduleName?: string;
   creates: string;
   explanation: string;
 };
 
 export type WorkflowModel = {
+  source?: "dar" | "reviewed";
+  packageId?: string;
   packageName: string;
+  packageVersion?: string | null;
+  damlLfVersion?: string | null;
   moduleName: string;
   description: string;
+  decodedAt?: string;
+  originalFilename?: string;
+  dependencies?: number;
+  decoder?: { strategy: string; sdkVersion: string | null; authorityLevels: string[] };
+  modules?: Array<{ name: string; templates: WorkflowModel["templates"] }>;
   templates: Array<{
     name: string;
+    moduleName?: string;
     businessState: string;
+    fields?: Array<{ name: string; type: string }>;
     signatories: string[];
     observers: string[];
+    authority?: {
+      signatory: AuthorityReading;
+      observer: AuthorityReading;
+    };
     choices: Array<{
       name: string;
       controllers: string[];
-      creates: string;
+      controllerConfidence?: AuthorityConfidence;
+      controllerExpression?: string;
+      creates: string | null;
+      returnType?: string;
+      consuming?: boolean;
       arguments: Array<{ name: string; type: string; required: boolean }>;
       requiresMultipleParties: boolean;
     }>;
   }>;
+};
+
+export type AuthorityConfidence = "static" | "computed" | "dynamic";
+export type AuthorityReading = {
+  fields: string[];
+  confidence: AuthorityConfidence;
+  expression: string;
 };
 
 export type SavedAnalysis = {
@@ -258,6 +290,29 @@ async function api<T>(
   return payload as T;
 }
 
+async function uploadDarApi(file: File): Promise<{ manifest: WorkflowModel; cached: boolean }> {
+  const response = await fetch(`${API_BASE}/api/model/inspect-dar`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/octet-stream",
+      "x-dar-filename": file.name.replace(/[^A-Za-z0-9._-]/g, "_"),
+    },
+    body: file,
+  });
+  const payload = (await response.json().catch(() => ({}))) as {
+    manifest?: WorkflowModel;
+    cached?: boolean;
+    error?: string;
+    details?: { stderr?: string };
+  };
+  if (!response.ok || !payload.manifest) {
+    throw new Error(
+      payload.details?.stderr || payload.error || `DAR decoding failed (${response.status})`,
+    );
+  }
+  return { manifest: payload.manifest, cached: Boolean(payload.cached) };
+}
+
 type LensContextValue = {
   analysis: Analysis;
   config: ConnectionConfig;
@@ -285,8 +340,11 @@ type LensContextValue = {
   openSavedAnalysis: (id: string) => void;
   deleteSavedAnalysis: (id: string) => void;
   model: WorkflowModel | null;
+  modelSource: "reviewed" | "dar";
   packageStatus: { installed: boolean; packageCount: number } | null;
   inspectPackages: () => Promise<void>;
+  decodeDar: (file: File) => Promise<void>;
+  useReviewedModel: () => void;
   submitFeedback: (rating: number, message: string) => Promise<void>;
 };
 
@@ -305,6 +363,8 @@ export function LensProvider({ children }: { children: ReactNode }) {
   const [lastDiscoveredAt, setLastDiscoveredAt] = useState<string | null>(null);
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
   const [model, setModel] = useState<WorkflowModel | null>(null);
+  const [reviewedModel, setReviewedModel] = useState<WorkflowModel | null>(null);
+  const [modelSource, setModelSource] = useState<"reviewed" | "dar">("reviewed");
   const [packageStatus, setPackageStatus] = useState<{
     installed: boolean;
     packageCount: number;
@@ -338,7 +398,12 @@ export function LensProvider({ children }: { children: ReactNode }) {
     }
     fetch(`${API_BASE}/api/model/catalog`)
       .then((response) => (response.ok ? response.json() : null))
-      .then((catalog) => catalog && setModel(catalog as WorkflowModel))
+      .then((catalog) => {
+        if (!catalog) return;
+        const reviewed = { ...(catalog as WorkflowModel), source: "reviewed" as const };
+        setReviewedModel(reviewed);
+        setModel(reviewed);
+      })
       .catch(() => undefined);
   }, []);
 
@@ -566,6 +631,27 @@ export function LensProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  async function decodeDar(file: File) {
+    await run("Decoding DAR", async () => {
+      if (!file.name.toLowerCase().endsWith(".dar")) throw new Error("Choose a .dar file");
+      if (file.size > 10_000_000) throw new Error("DAR files must be 10 MB or smaller");
+      const result = await uploadDarApi(file);
+      setModel(result.manifest);
+      setModelSource("dar");
+      setPackageStatus(null);
+      if (result.manifest.packageId) {
+        setConfig((current) => ({ ...current, packageId: result.manifest.packageId! }));
+      }
+    });
+  }
+
+  function useReviewedModel() {
+    if (!reviewedModel) return;
+    setModel(reviewedModel);
+    setModelSource("reviewed");
+    setPackageStatus(null);
+  }
+
   async function submitFeedback(rating: number, message: string) {
     await run("Sending feedback", async () => {
       await api("/api/feedback", config, { rating, message, workflowId: analysis.workflowId });
@@ -599,8 +685,11 @@ export function LensProvider({ children }: { children: ReactNode }) {
     openSavedAnalysis,
     deleteSavedAnalysis,
     model,
+    modelSource,
     packageStatus,
     inspectPackages,
+    decodeDar,
+    useReviewedModel,
     submitFeedback,
   };
   return <LensContext.Provider value={value}>{children}</LensContext.Provider>;

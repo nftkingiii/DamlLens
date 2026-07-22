@@ -91,18 +91,44 @@ function ContractsPage() {
                       <span>
                         {argument.name} · {argument.type}
                       </span>
-                      <input
-                        value={values[argument.name] || ""}
-                        onChange={(event) =>
-                          setActionValues((current) => ({
-                            ...current,
-                            [action.id]: { ...values, [argument.name]: event.target.value },
-                          }))
-                        }
-                        placeholder={
-                          argument.type === "party" ? "party::namespace" : `Enter ${argument.name}`
-                        }
-                      />
+                      {argument.type === "bool" ? (
+                        <select
+                          value={values[argument.name] || ""}
+                          onChange={(event) =>
+                            setActionValues((current) => ({
+                              ...current,
+                              [action.id]: { ...values, [argument.name]: event.target.value },
+                            }))
+                          }
+                        >
+                          <option value="">Select</option>
+                          <option value="true">True</option>
+                          <option value="false">False</option>
+                        </select>
+                      ) : (
+                        <input
+                          type={
+                            argument.type === "date"
+                              ? "date"
+                              : argument.type === "numeric" || argument.type === "int64"
+                                ? "number"
+                                : "text"
+                          }
+                          step={argument.type === "numeric" ? "any" : undefined}
+                          value={values[argument.name] || ""}
+                          onChange={(event) =>
+                            setActionValues((current) => ({
+                              ...current,
+                              [action.id]: { ...values, [argument.name]: event.target.value },
+                            }))
+                          }
+                          placeholder={
+                            argument.type === "party"
+                              ? "party::namespace"
+                              : `Enter ${argument.name}`
+                          }
+                        />
+                      )}
                     </label>
                   ))}
                 </div>

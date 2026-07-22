@@ -35,6 +35,10 @@ export const config = {
   grpcTimeoutMs: Number(process.env.DAMLLENS_GRPC_TIMEOUT_MS || 30000),
   rateLimitPerMinute: Number(process.env.DAMLLENS_RATE_LIMIT_PER_MINUTE || 120),
   feedbackWebhookUrl: process.env.DAMLLENS_FEEDBACK_WEBHOOK_URL || "",
+  damlcPath: process.env.DAMLLENS_DAMLC_PATH || "damlc",
+  damlcVersion: process.env.DAMLLENS_DAMLC_VERSION || "3.5.2",
+  darMaxBytes: Number(process.env.DAMLLENS_DAR_MAX_BYTES || 10_000_000),
+  darDecodeTimeoutMs: Number(process.env.DAMLLENS_DAR_DECODE_TIMEOUT_MS || 45_000),
   liveInvoiceUpdateIds: {
     createInvoice: "12204f1f603639aebf0bfc3fbb2a7c378593d0d4b6c2bba50a445d0f635106a3081c",
     acceptInvoice: "1220b448947bbcd6de775ab4f042aacfedc6593629547f76cb080409be314e5a0584",

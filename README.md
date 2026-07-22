@@ -10,11 +10,12 @@ DamlLens turns Canton/Daml ledger activity into readable workflow timelines, con
 - Multi-party invoice progression across supplier, buyer, and financier sessions.
 - Timeline, contract inventory, party-role map, and normalized ledger evidence.
 - Evidence-linked risk and time-in-state alerts.
-- Connected package verification and an interpreted workflow manifest.
+- Secure DAR upload and semantic decoding for templates, fields, choices, visibility, authority, and likely transitions.
+- Connected package verification and reviewed-model fallback when a DAR is unavailable.
 - Local snapshots, Markdown report export, native sharing, and product feedback.
 - Production origin restrictions, endpoint pinning, rate limits, payload caps, and gRPC timeouts.
 
-Unknown templates still receive generic event and contract interpretation. Rich choice generation requires a reviewed workflow manifest; the included manifest covers `DamlLens.InvoiceFinance`. Arbitrary DAR semantic decoding remains a future extension because it requires a Daml-LF package decoder rather than guessing from archive bytes.
+The practical hybrid decoder validates each uploaded DAR with the pinned Daml 3.5.2 compiler, inspects its Daml-LF structure, and normalizes the result into DamlLens's workflow model. Live ledger evidence remains the source of truth for runtime party values and contract history. Authority inferred from static package structure is labeled by confidence, while dynamic expressions are resolved conservatively at runtime. Unknown templates still receive generic event and contract interpretation, and the included reviewed manifest remains available as a fallback.
 
 ## Project layout
 
@@ -82,4 +83,4 @@ Example:
 VITE_DAMLLENS_API_URL=https://damllens-backend-production.up.railway.app
 ```
 
-The backend Docker image installs `grpcurl`, so real Canton gRPC calls work in Railway. Users should continue supplying their own short-lived bearer token through the UI.
+The backend Docker image installs `grpcurl` and the pinned Daml 3.5.2 compiler, so real Canton gRPC calls and DAR decoding work in Railway. Users authenticate through the configured Noders OIDC login; credentials are entered only on the identity provider's page and are not carried by DamlLens.

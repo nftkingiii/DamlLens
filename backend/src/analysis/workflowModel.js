@@ -32,32 +32,43 @@ export const WORKFLOW_MODEL = {
   ],
 };
 
-export function findTemplate(name) {
-  return WORKFLOW_MODEL.templates.find((item) => item.name === name);
+const SUPPORTED_ACTION_TYPES = new Set(["party", "text", "numeric", "date", "bool", "int64"]);
+
+export function findTemplate(name, model = WORKFLOW_MODEL, moduleName = undefined) {
+  return model?.templates?.find(
+    (item) => item.name === name && (!moduleName || !item.moduleName || item.moduleName === moduleName),
+  );
 }
 
-export function findChoice(templateName, choiceName) {
-  return findTemplate(templateName)?.choices.find((item) => item.name === choiceName);
+export function findChoice(templateName, choiceName, model = WORKFLOW_MODEL, moduleName = undefined) {
+  return findTemplate(templateName, model, moduleName)?.choices.find((item) => item.name === choiceName);
 }
 
-export function availableActions(contracts, partyId) {
+export function availableActions(contracts, partyId, modelResolver = () => WORKFLOW_MODEL) {
   if (!partyId) return [];
   return contracts.flatMap((contract) => {
     if (contract.status !== "active") return [];
-    const model = findTemplate(contract.template);
-    if (!model) return [];
-    return model.choices
+    const packageId = contract.templateId?.package_id || contract.templateId?.packageId;
+    const moduleName = contract.templateId?.module_name || contract.templateId?.moduleName;
+    const workflowModel = modelResolver(packageId) || WORKFLOW_MODEL;
+    const templateModel = findTemplate(contract.template, workflowModel, moduleName);
+    if (!templateModel) return [];
+    return templateModel.choices
       .filter((item) => !item.requiresMultipleParties)
+      .filter((item) => !item.controllerConfidence || item.controllerConfidence === "static")
+      .filter((item) => item.arguments.every((argument) => SUPPORTED_ACTION_TYPES.has(argument.type)))
       .filter((item) => item.controllers.every((role) => contract.fields?.[role] === partyId))
       .map((item) => ({
         id: `${contract.contractId}:${item.name}`,
         contractId: contract.contractId,
         template: contract.template,
         choice: item.name,
+        packageId,
+        moduleName: templateModel.moduleName || workflowModel.moduleName,
         controllers: item.controllers,
         arguments: item.arguments,
         creates: item.creates,
-        explanation: `${item.controllers.join(" and ")} can exercise ${item.name}, moving the workflow to ${item.creates}.`,
+        explanation: `${item.controllers.join(" and ")} can exercise ${item.name}${item.creates ? `, moving the workflow to ${item.creates}` : ""}.`,
       }));
   });
 }
