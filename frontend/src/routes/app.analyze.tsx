@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
   ArrowRight,
@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Users,
   Sparkles,
+  Upload,
 } from "lucide-react";
 import { useState } from "react";
 import { PageHeader, StatusBadge } from "@/components/lens-shell";
@@ -308,6 +309,21 @@ function AnalyzePage() {
             >
               Analyze updates <ArrowRight />
             </button>
+          </div>
+
+          <div className="model-setup-link">
+            <Upload />
+            <div>
+              <span className="eyebrow">Unfamiliar Daml app?</span>
+              <strong>Load its workflow model first</strong>
+              <small>
+                Add a DAR so DamlLens can name states, authority, and possible next actions before
+                reading ledger activity.
+              </small>
+            </div>
+            <Link to="/model" className="button ghost compact">
+              Set up model <ArrowRight />
+            </Link>
           </div>
         </aside>
       </section>

@@ -17,7 +17,16 @@ function TimelinePage() {
         eyebrow="Timeline"
         title="Every state change, in order."
         description="Follow creates and archives as one business workflow instead of decoding isolated ledger events."
-        actions={<StatusBadge status={`${analysis.timeline.length} events`} />}
+        actions={
+          <>
+            <StatusBadge
+              status={
+                analysis.source.includes("Illustrative") ? "Preview evidence" : "Ledger confirmed"
+              }
+            />
+            <StatusBadge status={`${analysis.timeline.length} events`} />
+          </>
+        }
       />
       <section className="timeline-stage panel">
         <div className="timeline-rail" aria-label="Workflow event progress">

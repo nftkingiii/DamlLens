@@ -65,7 +65,7 @@ function Landing() {
                 Analyze a workflow <ArrowRight />
               </Link>
               <Link to="/model" className="button ghost">
-                View Daml model <Code2 />
+                View workflow model <Code2 />
               </Link>
             </div>
             <div className="hero-proof">

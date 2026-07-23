@@ -26,7 +26,7 @@ const nav = [
   { href: "/app/contracts", label: "Contracts", icon: FileStack },
   { href: "/app/parties", label: "Authority", icon: Network },
   { href: "/app/alerts", label: "Alerts", icon: AlertTriangle },
-  { href: "/model", label: "Daml model", icon: Code2 },
+  { href: "/model", label: "Workflow model", icon: Code2 },
   { href: "/app/raw-data", label: "Raw data", icon: Braces },
 ];
 

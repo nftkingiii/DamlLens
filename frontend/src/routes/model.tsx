@@ -1,5 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
+  ArrowRight,
   Braces,
   CheckCircle2,
   Code2,
@@ -80,10 +81,10 @@ function ModelPage() {
   return (
     <div className="app-page">
       <PageHeader
-        eyebrow="Daml model"
-        title="Decode the rules behind a workflow."
-        description="Inspect templates, fields, visibility, choices, controllers, arguments, and likely transitions from a compiled DAR."
-        actions={<StatusBadge status={modelSource === "dar" ? "Decoded DAR" : "Reviewed model"} />}
+        eyebrow="Workflow setup"
+        title="Understand this workflow's rules."
+        description="Load a compiled model so DamlLens can explain contract states, who can act, and what may happen next."
+        actions={<StatusBadge status={modelSource === "dar" ? "Model loaded" : "Reviewed model"} />}
       />
 
       <section className="panel dar-decoder-panel">
@@ -91,14 +92,14 @@ function ModelPage() {
           <FileArchive />
         </div>
         <div className="decoder-copy">
-          <span className="eyebrow">Hybrid semantic decoder</span>
+          <span className="eyebrow">Workflow model</span>
           <h2>
-            {modelSource === "dar" ? model?.originalFilename : "Give DamlLens a compiled model"}
+            {modelSource === "dar" ? model?.originalFilename : "Load an unfamiliar Daml workflow"}
           </h2>
           <p>
             {modelSource === "dar"
-              ? `${templates.length} templates decoded across ${model?.modules?.length || 1} module${model?.modules?.length === 1 ? "" : "s"}. Live ledger evidence can now be interpreted against this structure.`
-              : "Upload a DAR once. DamlLens validates it, decodes its Daml-LF structure, and labels authority rules by confidence."}
+              ? `${templates.length} contract templates are ready. DamlLens can now use this model to explain visible ledger activity.`
+              : "Upload the app's DAR once. DamlLens will map its contract states, actions, authority rules, and possible next states."}
           </p>
           {modelSource === "dar" && (
             <div className="decoder-meta">
@@ -117,7 +118,7 @@ function ModelPage() {
             className="visually-hidden"
           />
           <button
-            className="button primary compact"
+            className="button secondary compact"
             onClick={() => inputRef.current?.click()}
             disabled={!!busy}
           >
@@ -125,7 +126,7 @@ function ModelPage() {
             {busy === "Decoding DAR"
               ? "Decoding..."
               : modelSource === "dar"
-                ? "Decode another"
+                ? "Load another model"
                 : "Choose DAR"}
           </button>
           {modelSource === "dar" && (
@@ -138,6 +139,32 @@ function ModelPage() {
             </button>
           )}
           <small>Maximum 10 MB. The temporary upload is deleted after decoding.</small>
+          <Link to="/app/analyze" className="button primary compact">
+            Analyze live activity <ArrowRight />
+          </Link>
+        </div>
+      </section>
+
+      <section className="evidence-key" aria-label="How DamlLens describes evidence">
+        <div>
+          <span className="evidence-key-mark dar" />
+          <strong>From DAR</strong>
+          <small>Declared directly by the compiled model</small>
+        </div>
+        <div>
+          <span className="evidence-key-mark inferred" />
+          <strong>Inferred</strong>
+          <small>Derived from code structure, not a completed event</small>
+        </div>
+        <div>
+          <span className="evidence-key-mark confirmed" />
+          <strong>Ledger confirmed</strong>
+          <small>Observed in live Canton activity</small>
+        </div>
+        <div>
+          <span className="evidence-key-mark runtime" />
+          <strong>Needs runtime data</strong>
+          <small>Depends on values available only during execution</small>
         </div>
       </section>
 
@@ -203,8 +230,8 @@ function ModelPage() {
             <span className="eyebrow">Selected template</span>
             <h2>{selected.name}</h2>
             <p>
-              {selected.businessState}. The model shows static structure; live Canton data confirms
-              what actually occurred.
+              {selected.businessState}. Model information explains what is allowed; the timeline
+              records only what the ledger confirms.
             </p>
             {modelSource === "dar" && confidence && <ConfidenceBadge confidence={confidence} />}
           </div>
@@ -229,8 +256,12 @@ function ModelPage() {
             />
             <Fact
               icon={Network}
-              label="Creates next"
-              value={primaryChoice?.creates || "No direct contract return"}
+              label="Possible next state"
+              value={
+                primaryChoice?.creates
+                  ? `${primaryChoice.creates} · inferred`
+                  : "No next state inferred"
+              }
             />
             <Fact
               icon={Eye}
@@ -241,12 +272,8 @@ function ModelPage() {
             />
             <Fact
               icon={ShieldCheck}
-              label="Authority confidence"
-              value={
-                confidence
-                  ? `${confidence} · verified against live evidence at runtime`
-                  : "No choice authority"
-              }
+              label="Authority source"
+              value={confidence ? confidenceCopy(confidence) : "No authority rule declared"}
             />
           </div>
           <div className="code-preview">
@@ -264,12 +291,16 @@ function templateId(template: { moduleName?: string; name: string }) {
 }
 
 function ConfidenceBadge({ confidence }: { confidence: AuthorityConfidence }) {
-  const copy = {
-    static: "Static authority",
-    computed: "Computed authority",
-    dynamic: "Runtime authority",
-  }[confidence];
+  const copy = confidenceCopy(confidence);
   return <span className={`confidence-badge ${confidence}`}>{copy}</span>;
+}
+
+function confidenceCopy(confidence: AuthorityConfidence) {
+  return {
+    static: "From DAR",
+    computed: "Inferred from code",
+    dynamic: "Needs runtime data",
+  }[confidence];
 }
 
 function renderTemplate(
@@ -278,7 +309,7 @@ function renderTemplate(
   const fields = selected.fields?.length
     ? `\n  fields ${selected.fields.map((field) => `${field.name}:${field.type}`).join(", ")}`
     : "";
-  return `template ${selected.name}${fields}\n  signatory ${selected.signatories.join(", ") || "dynamic"}\n  observer ${selected.observers.join(", ") || "none"}${selected.choices.map((choice) => `\n\n  ${choice.consuming === false ? "nonconsuming " : ""}choice ${choice.name}\n    controller ${choice.controllers.join(", ") || "resolve at runtime"}\n    confidence ${choice.controllerConfidence || "reviewed"}\n    returns ${choice.returnType || choice.creates || "Unit"}${choice.arguments.length ? `\n    arguments ${choice.arguments.map((arg) => `${arg.name}:${arg.type}`).join(", ")}` : ""}`).join("")}`;
+  return `template ${selected.name}${fields}\n  signatory ${selected.signatories.join(", ") || "dynamic"}\n  observer ${selected.observers.join(", ") || "none"}${selected.choices.map((choice) => `\n\n  ${choice.consuming === false ? "nonconsuming " : ""}choice ${choice.name}\n    controller ${choice.controllers.join(", ") || "resolve at runtime"}\n    source ${choice.controllerConfidence ? confidenceCopy(choice.controllerConfidence) : "reviewed model"}\n    possible next state ${choice.creates || "none inferred"}\n    returns ${choice.returnType || choice.creates || "Unit"}${choice.arguments.length ? `\n    arguments ${choice.arguments.map((arg) => `${arg.name}:${arg.type}`).join(", ")}` : ""}`).join("")}`;
 }
 
 function Fact({ icon: Icon, label, value }: { icon: typeof Eye; label: string; value: string }) {
