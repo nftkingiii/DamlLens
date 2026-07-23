@@ -36,7 +36,9 @@ COPY --from=damlc /opt/dpm/cache/components/damlc/3.5.2/damlc-dist-dpm /opt/daml
 COPY package.json ./
 COPY src ./src
 
-RUN node --check src/server.js && grpcurl -version && /opt/damlc/damlc --version
+RUN node --check src/server.js \
+    && grpcurl -version \
+    && /opt/damlc/damlc --help >/dev/null
 
 EXPOSE 8787
 CMD ["node", "src/server.js"]
